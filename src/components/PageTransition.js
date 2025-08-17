@@ -1,5 +1,5 @@
 import React from 'react';
-import { CSSTransition, TransitionGroup } from 'react-transition-group';
+import { CSSTransition, SwitchTransition } from 'react-transition-group';
 import { useLocation } from 'react-router-dom';
 import './PageTransition.css';
 
@@ -7,18 +7,18 @@ const PageTransition = ({ children }) => {
   const location = useLocation();
 
   return (
-    <TransitionGroup className="page-transition-group">
+    <SwitchTransition mode="out-in">
       <CSSTransition
         key={location.pathname}
         classNames="page"
-        timeout={600}
+        timeout={320}
         unmountOnExit
       >
         <div className="page-wrapper">
           {children}
         </div>
       </CSSTransition>
-    </TransitionGroup>
+    </SwitchTransition>
   );
 };
 

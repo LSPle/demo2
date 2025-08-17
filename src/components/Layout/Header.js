@@ -30,7 +30,9 @@ const Header = () => {
   const handleMenuClick = ({ key }) => {
     switch (key) {
       case 'logout':
-        console.log('退出登录');
+        localStorage.removeItem('isLoggedIn');
+        localStorage.removeItem('username');
+        window.location.href = '/login';
         break;
       case 'profile':
         console.log('个人资料');
@@ -56,7 +58,7 @@ const Header = () => {
         alignItems: 'center',
         boxShadow: '0 4px 20px rgba(0,21,41,0.08)',
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        borderRadius: '0 0 0 20px'
+        borderRadius: '0'
       }}
     >
       <div style={{ flex: 1 }} />
