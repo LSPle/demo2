@@ -1,252 +1,205 @@
-import React, { useState } from 'react';
-import { Card, Steps, Select, Input, Button, Alert, List, Tag, Space, Divider } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Card, Select, Input, Button, Alert, message, Typography } from 'antd';
 import {
   DatabaseOutlined,
   CodeOutlined,
-  BulbOutlined,
-  CheckCircleOutlined,
-  ClockCircleOutlined,
-  ExclamationCircleOutlined
+  BulbOutlined
 } from '@ant-design/icons';
+import { API_ENDPOINTS } from '../config/api';
 
 const { TextArea } = Input;
 const { Option } = Select;
+const { Paragraph } = Typography;
+
+// 新增：格式化分析文本的渲染函数
+const renderAnalysis = (text) => {
+  const lines = (text || '').split('\n');
+  const blocks = [];
+  let currentList = [];
+  let key = 0;
+
+  const flushList = () => {
+    if (currentList.length) {
+      blocks.push(
+        <ul key={`list-${key++}`} style={{ paddingLeft: 18, marginBottom: 8 }}>
+          {currentList.map((item, idx) => (
+            <li key={idx} style={{ lineHeight: 1.8 }}>{item}</li>
+          ))}
+        </ul>
+      );
+      currentList = [];
+    }
+  };
+
+  lines.forEach((raw) => {
+    const line = raw.trim();
+    if (!line) return;
+
+    // 小标题（支持形如【标题】或 Markdown # 标题）
+    if ((line.startsWith('【') && line.endsWith('】')) || /^#{1,6}\s/.test(line)) {
+      flushList();
+      blocks.push(
+        <div key={`h-${key++}`} style={{ fontWeight: 600, marginTop: 8, marginBottom: 6 }}>
+          {line.replace(/^#{1,6}\s*/, '')}
+        </div>
+      );
+      return;
+    }
+
+    // 项目符号列表
+    if (/^-\s+/.test(line) || /^[•·]\s+/.test(line)) {
+      currentList.push(line.replace(/^-\s+|^[•·]\s+/, ''));
+      return;
+    }
+
+    // 普通段落
+    flushList();
+    blocks.push(
+      <Paragraph key={`p-${key++}`} style={{ marginBottom: 8, whiteSpace: 'pre-wrap' }}>
+        {line}
+      </Paragraph>
+    );
+  });
+
+  flushList();
+  return <div>{blocks}</div>;
+};
 
 const SQLOptimization = () => {
-  const [currentStep, setCurrentStep] = useState(0);
   const [selectedInstance, setSelectedInstance] = useState('');
+  const [selectedDatabase, setSelectedDatabase] = useState('');
   const [sqlQuery, setSqlQuery] = useState('');
   const [optimizationResults, setOptimizationResults] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // 数据库实例选项
-  const instanceOptions = [
-    { value: 'mysql-prod', label: '主数据库-生产环境 (MySQL 8.0.23)' },
-    { value: 'mysql-slave', label: '从数据库-生产环境 (MySQL 8.0.23)' },
-    { value: 'redis-cluster', label: 'Redis缓存集群 (Redis 6.2.5)' },
-    { value: 'mongodb-log', label: 'MongoDB-日志数据库 (MongoDB 5.0.3)' }
-  ];
+  const [instanceOptions, setInstanceOptions] = useState([]);
+  // 数据库选项
+  const [databaseOptions, setDatabaseOptions] = useState([]);
+  const [loadingDatabases, setLoadingDatabases] = useState(false);
 
-  // 模拟优化结果
-  const mockOptimizationResults = {
-    originalQuery: sqlQuery,
-    optimizedQuery: `SELECT u.id, u.name, p.title 
-FROM users u 
-INNER JOIN posts p ON u.id = p.user_id 
-WHERE u.status = 'active' 
-AND p.created_at >= '2023-01-01' 
-ORDER BY p.created_at DESC 
-LIMIT 100;`,
-    improvements: [
-      {
-        type: 'index',
-        severity: 'high',
-        title: '建议添加复合索引',
-        description: '在 posts 表的 (user_id, created_at) 字段上创建复合索引',
-        impact: '查询性能提升 85%',
-        sql: 'CREATE INDEX idx_posts_user_created ON posts(user_id, created_at);'
-      },
-      {
-        type: 'query',
-        severity: 'medium',
-        title: '优化 WHERE 条件顺序',
-        description: '将选择性更高的条件放在前面',
-        impact: '查询性能提升 15%',
-        sql: null
-      },
-      {
-        type: 'limit',
-        severity: 'low',
-        title: '添加 LIMIT 限制',
-        description: '避免返回过多数据，建议添加合适的 LIMIT',
-        impact: '减少内存使用 30%',
-        sql: null
+  useEffect(() => {
+    const fetchInstances = async () => {
+      try {
+        const response = await fetch(API_ENDPOINTS.INSTANCES);
+        if (!response.ok) throw new Error('API响应失败');
+        const data = await response.json();
+        const options = (Array.isArray(data) ? data : [])
+          // 仅展示非异常实例，视为"已连接"
+          .filter(inst => inst.status !== 'error')
+          .map(inst => ({
+            value: String(inst.id),
+            label: `${inst.instanceName} (${inst.dbType}) ${inst.host}:${inst.port}`
+          }));
+        setInstanceOptions(options);
+      } catch (err) {
+        console.error('获取实例列表失败:', err);
+        message.error('获取数据库实例列表失败，请检查后端服务');
+        setInstanceOptions([]);
       }
-    ],
-    performance: {
-      before: { executionTime: '2.3s', rowsExamined: 150000 },
-      after: { executionTime: '0.2s', rowsExamined: 1200 }
-    }
-  };
-
-  const handleNext = () => {
-    if (currentStep === 0 && selectedInstance) {
-      setCurrentStep(1);
-    } else if (currentStep === 1 && sqlQuery.trim()) {
-      // 模拟分析过程
-      setTimeout(() => {
-        setOptimizationResults(mockOptimizationResults);
-        setCurrentStep(2);
-      }, 1500);
-    }
-  };
-
-  const handlePrevious = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
-
-  const getSeverityColor = (severity) => {
-    const colors = {
-      high: 'red',
-      medium: 'orange',
-      low: 'blue'
     };
-    return colors[severity] || 'default';
+    fetchInstances();
+  }, []);
+
+  // 当选择实例时，获取该实例的数据库列表
+  useEffect(() => {
+    if (selectedInstance) {
+      fetchDatabases(selectedInstance);
+    } else {
+      setDatabaseOptions([]);
+      setSelectedDatabase('');
+    }
+  }, [selectedInstance]);
+
+  const fetchDatabases = async (instanceId) => {
+    setLoadingDatabases(true);
+    try {
+      const response = await fetch(API_ENDPOINTS.INSTANCE_DATABASES(instanceId));
+      if (!response.ok) {
+        if (response.status === 400) {
+          const errorData = await response.json();
+          message.warning(errorData.error || '该实例类型不支持数据库列表');
+          setDatabaseOptions([]);
+          return;
+        }
+        throw new Error('获取数据库列表失败');
+      }
+      const data = await response.json();
+      const databases = data.databases || [];
+      setDatabaseOptions(databases.map(db => ({ value: db, label: db })));
+      
+      // 如果只有一个数据库，自动选择
+      if (databases.length === 1) {
+        setSelectedDatabase(databases[0]);
+      } else {
+        setSelectedDatabase('');
+      }
+    } catch (err) {
+      console.error('获取数据库列表失败:', err);
+      message.error('获取数据库列表失败，请检查实例连接状态');
+      setDatabaseOptions([]);
+    } finally {
+      setLoadingDatabases(false);
+    }
   };
 
-  const getSeverityIcon = (severity) => {
-    const icons = {
-      high: <ExclamationCircleOutlined />,
-      medium: <ClockCircleOutlined />,
-      low: <BulbOutlined />
-    };
-    return icons[severity] || <BulbOutlined />;
+  const handleAnalyze = async () => {
+    if (!selectedInstance) {
+      message.warning('请选择实例');
+      return;
+    }
+    if (!selectedDatabase) {
+      message.warning('请选择数据库');
+      return;
+    }
+    if (!sqlQuery.trim()) {
+      message.warning('请输入SQL语句');
+      return;
+    }
+
+    setIsAnalyzing(true);
+    try {
+      const payload = { 
+        instanceId: Number(selectedInstance), 
+        sql: sqlQuery.trim(),
+        database: selectedDatabase
+      };
+
+      const resp = await fetch(API_ENDPOINTS.SQL_ANALYZE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!resp.ok) {
+        const errorData = await resp.json();
+        throw new Error(errorData.error || '分析接口返回错误');
+      }
+      
+      const data = await resp.json();
+      const rewritten = data?.rewrittenSql || null;
+      const analysis = data?.analysis || null;
+      
+      setOptimizationResults({
+        originalQuery: sqlQuery,
+        optimizedQuery: rewritten || sqlQuery,
+        hasOptimization: !!rewritten && rewritten !== sqlQuery,
+        analysis
+      });
+    } catch (e) {
+      console.error(e);
+      message.error(`分析失败：${e.message}`);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
-  const steps = [
-    {
-      title: '选择实例与输入SQL',
-      icon: <DatabaseOutlined />
-    },
-    {
-      title: '查看优化建议',
-      icon: <BulbOutlined />
-    }
-  ];
-
-  const renderStepContent = () => {
-    switch (currentStep) {
-      case 0:
-        return (
-          <div className="step-content">
-            <h3>选择数据库实例并输入SQL语句</h3>
-            
-            <div style={{ marginBottom: 24 }}>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                数据库实例 <span style={{ color: '#ff4d4f' }}>*</span>
-              </label>
-              <Select
-                placeholder="请选择数据库实例"
-                style={{ width: '100%' }}
-                value={selectedInstance}
-                onChange={setSelectedInstance}
-              >
-                {instanceOptions.map(option => (
-                  <Option key={option.value} value={option.value}>
-                    {option.label}
-                  </Option>
-                ))}
-              </Select>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
-                SQL语句 <span style={{ color: '#ff4d4f' }}>*</span>
-              </label>
-              <TextArea
-                placeholder="请输入需要优化的SQL语句..."
-                rows={12}
-                value={sqlQuery}
-                onChange={(e) => setSqlQuery(e.target.value)}
-                style={{ fontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace' }}
-              />
-              <div style={{ marginTop: 8, color: '#8c8c8c', fontSize: 12 }}>
-                支持SELECT、UPDATE、INSERT、DELETE等SQL语句的审核
-              </div>
-            </div>
-          </div>
-        );
-
-      case 1:
-        return (
-          <div className="step-content">
-            <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <div style={{ fontSize: 16, marginBottom: 16 }}>
-                <CodeOutlined style={{ fontSize: 24, color: '#1890ff', marginRight: 8 }} />
-                正在分析SQL语句...
-              </div>
-              <div style={{ color: '#8c8c8c' }}>请稍候，系统正在为您生成优化建议</div>
-            </div>
-          </div>
-        );
-
-      case 2:
-        return (
-          <div className="step-content">
-            <h3>优化建议</h3>
-            
-            {/* 性能对比 */}
-            <Alert
-              message="优化效果预览"
-              description={
-                <div>
-                  <div>执行时间：{optimizationResults?.performance.before.executionTime} → {optimizationResults?.performance.after.executionTime}</div>
-                  <div>扫描行数：{optimizationResults?.performance.before.rowsExamined.toLocaleString()} → {optimizationResults?.performance.after.rowsExamined.toLocaleString()}</div>
-                </div>
-              }
-              type="success"
-              showIcon
-              style={{ marginBottom: 24 }}
-            />
-
-            {/* 优化建议列表 */}
-            <List
-              header={<div style={{ fontWeight: 500 }}>优化建议详情</div>}
-              dataSource={optimizationResults?.improvements || []}
-              renderItem={(item, index) => (
-                <List.Item>
-                  <div style={{ width: '100%' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-                      <Tag color={getSeverityColor(item.severity)} icon={getSeverityIcon(item.severity)}>
-                        {item.severity === 'high' ? '高优先级' : item.severity === 'medium' ? '中优先级' : '低优先级'}
-                      </Tag>
-                      <span style={{ fontWeight: 500, fontSize: 14 }}>{item.title}</span>
-                    </div>
-                    <div style={{ color: '#595959', marginBottom: 8 }}>
-                      {item.description}
-                    </div>
-                    <div style={{ color: '#52c41a', fontSize: 12, marginBottom: 8 }}>
-                      预期效果：{item.impact}
-                    </div>
-                    {item.sql && (
-                      <div>
-                        <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>建议执行的SQL：</div>
-                        <div style={{
-                          background: '#f5f5f5',
-                          padding: 8,
-                          borderRadius: 4,
-                          fontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace',
-                          fontSize: 12
-                        }}>
-                          {item.sql}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </List.Item>
-              )}
-            />
-
-            {/* 优化后的SQL */}
-            <Divider>优化后的SQL语句</Divider>
-            <div style={{
-              background: '#f5f5f5',
-              padding: 16,
-              borderRadius: 6,
-              fontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace',
-              fontSize: 13,
-              lineHeight: 1.6,
-              whiteSpace: 'pre-wrap'
-            }}>
-              {optimizationResults?.optimizedQuery}
-            </div>
-          </div>
-        );
-
-      default:
-        return null;
-    }
+  const handleReset = () => {
+    setSelectedInstance('');
+    setSelectedDatabase('');
+    setSqlQuery('');
+    setOptimizationResults(null);
+    setDatabaseOptions([]);
   };
 
   return (
@@ -254,52 +207,109 @@ LIMIT 100;`,
       {/* 页面标题 */}
       <div className="page-header">
         <h1>SQL审核优化</h1>
-        <p>对SQL语句进行审核优化建议</p>
+        <p>选择实例和数据库，对SQL语句进行审核优化</p>
       </div>
 
-      {/* 步骤导航 */}
-      <Card className="content-card" style={{ marginBottom: 24 }}>
-        <Steps
-          current={currentStep}
-          items={steps}
-        />
-      </Card>
-
-      {/* 步骤内容 */}
+      {/* 主要内容区域 */}
       <Card className="content-card">
-        {renderStepContent()}
-        
-        {/* 操作按钮 */}
-        <div style={{ marginTop: 24, textAlign: 'right' }}>
-          <Space>
-            {currentStep > 0 && currentStep < 2 && (
-              <Button onClick={handlePrevious}>
-                上一步
-              </Button>
-            )}
-            {currentStep === 0 && (
-              <Button
-                type="primary"
-                onClick={handleNext}
-                disabled={!selectedInstance || !sqlQuery.trim()}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          
+          {/* 实例选择 */}
+          <div>
+            <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+              <DatabaseOutlined style={{ marginRight: 8 }} />
+              数据库实例 <span style={{ color: '#ff4d4f' }}>*</span>
+            </label>
+            <Select
+              placeholder="请选择数据库实例"
+              style={{ width: '100%' }}
+              value={selectedInstance}
+              onChange={setSelectedInstance}
+              notFoundContent="暂无可用实例"
+            >
+              {instanceOptions.map(option => (
+                <Option key={option.value} value={option.value}>
+                  {option.label}
+                </Option>
+              ))}
+            </Select>
+          </div>
+
+          {/* 数据库选择 */}
+          {selectedInstance && (
+            <div>
+              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+                <CodeOutlined style={{ marginRight: 8 }} />
+                数据库 <span style={{ color: '#ff4d4f' }}>*</span>
+              </label>
+              <Select
+                placeholder={loadingDatabases ? "正在加载数据库列表..." : "请选择数据库"}
+                style={{ width: '100%' }}
+                value={selectedDatabase}
+                onChange={setSelectedDatabase}
+                loading={loadingDatabases}
+                notFoundContent={loadingDatabases ? "加载中..." : "暂无可用数据库"}
               >
-                下一步
-              </Button>
-            )}
-            {currentStep === 2 && (
-              <Button
-                type="primary"
-                onClick={() => {
-                  setCurrentStep(0);
-                  setSelectedInstance('');
-                  setSqlQuery('');
-                  setOptimizationResults(null);
-                }}
-              >
-                重新分析
-              </Button>
-            )}
-          </Space>
+                {databaseOptions.map(option => (
+                  <Option key={option.value} value={option.value}>
+                    {option.label}
+                  </Option>
+                ))}
+              </Select>
+              <div style={{ marginTop: 4, color: '#8c8c8c', fontSize: 12 }}>
+                选择数据库可以提供更精确的优化建议
+              </div>
+            </div>
+          )}
+
+          {/* SQL输入 */}
+          <div>
+            <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>
+              SQL 语句 <span style={{ color: '#ff4d4f' }}>*</span>
+            </label>
+            <TextArea
+              rows={6}
+              placeholder="请输入需要分析的SQL语句"
+              value={sqlQuery}
+              onChange={(e) => setSqlQuery(e.target.value)}
+            />
+            <div style={{ marginTop: 4, color: '#8c8c8c', fontSize: 12 }}>
+              支持SELECT/INSERT/UPDATE/DELETE等语句
+            </div>
+          </div>
+
+          {/* 操作按钮 */}
+          <div style={{ display: 'flex', gap: 12 }}>
+            <Button type="primary" onClick={handleAnalyze} loading={isAnalyzing}>
+              开始分析
+            </Button>
+            <Button onClick={handleReset} disabled={isAnalyzing}>重置</Button>
+          </div>
+
+          {/* 分析结果 */}
+          {optimizationResults && (
+            <Card type="inner" title={<span><BulbOutlined style={{ marginRight: 8 }} />分析结果</span>}
+                  style={{ marginTop: 16 }}>
+              {optimizationResults.analysis ? (
+                <Alert
+                  message="分析与建议"
+                  description={renderAnalysis(optimizationResults.analysis)}
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                />
+              ) : (
+                <Alert message="未获得详细分析（可能为降级输出，仅尝试了SQL重写）" type="warning" showIcon style={{ marginBottom: 16 }} />
+              )}
+
+              <div style={{ marginTop: 8 }}>
+                <div style={{ marginBottom: 6, fontWeight: 500 }}>建议SQL</div>
+                <Paragraph copyable style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>
+                  {optimizationResults.optimizedQuery}
+                </Paragraph>
+              </div>
+            </Card>
+          )}
         </div>
       </Card>
     </div>

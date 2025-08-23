@@ -1,146 +1,155 @@
-import React, { useState } from 'react';
-import { Card, Select, Table, Button, Space, Tag, Progress, Alert, Tabs, Descriptions, Input, message } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Card, Select, Table, Button, Space, Tag, Progress, Alert, Descriptions, message } from 'antd';
 import {
   DatabaseOutlined,
-  SettingOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   CloseCircleOutlined,
   SyncOutlined,
-  EditOutlined,
-  SaveOutlined,
   ReloadOutlined
 } from '@ant-design/icons';
+import API_BASE_URL, { API_ENDPOINTS } from '../config/api';
 
 const { Option } = Select;
-const { TabPane } = Tabs;
-const { TextArea } = Input;
+// 不再使用 Tabs.TabPane，保持 items API 统一
+// const { TabPane } = Tabs;
+// 移除未使用的 TextArea
+// const { TextArea } = Input;
 
 const ConfigOptimization = () => {
   const [selectedInstance, setSelectedInstance] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [configData, setConfigData] = useState(null);
-  const [editingConfig, setEditingConfig] = useState({});
+  // const [editingConfig, setEditingConfig] = useState({}); // 移除编辑模式
+  // 新增：慢日志分析状态与数据，避免引用未定义
+  const [slowData, setSlowData] = useState(null);
+  const [isSlowAnalyzing, setIsSlowAnalyzing] = useState(false);
 
-  // 数据库实例选项
-  const instanceOptions = [
-    { value: 'mysql-prod', label: '主数据库-生产环境', type: 'MySQL 8.0' },
-    { value: 'mysql-slave', label: '从数据库-生产环境', type: 'MySQL 8.0' },
-    { value: 'redis-cluster', label: 'Redis缓存集群', type: 'Redis 6.2' },
-    { value: 'mongodb-log', label: 'MongoDB-日志数据库', type: 'MongoDB 5.0' }
-  ];
+  // 数据库实例选项（从后端加载，仅展示非异常实例）
+  const [instanceOptions, setInstanceOptions] = useState([]);
 
-  // 模拟配置数据
-  const mockConfigData = {
-    basicInfo: {
-      instanceName: '主数据库-生产环境',
-      version: 'MySQL 8.0.28',
-      uptime: '45天 12小时 30分钟',
-      connections: '156/1000',
-      memoryUsage: '68%',
-      diskUsage: '45%'
-    },
-    configItems: [
-      {
-        key: '1',
-        category: '连接配置',
-        parameter: 'max_connections',
-        currentValue: '1000',
-        recommendedValue: '1500',
-        status: 'warning',
-        description: '最大连接数设置',
-        impact: '中等',
-        reason: '当前连接使用率较高，建议适当增加最大连接数'
-      },
-      {
-        key: '2',
-        category: '缓存配置',
-        parameter: 'innodb_buffer_pool_size',
-        currentValue: '8G',
-        recommendedValue: '12G',
-        status: 'error',
-        description: 'InnoDB缓冲池大小',
-        impact: '高',
-        reason: '缓冲池大小不足，影响查询性能'
-      },
-      {
-        key: '3',
-        category: '日志配置',
-        parameter: 'slow_query_log',
-        currentValue: 'OFF',
-        recommendedValue: 'ON',
-        status: 'warning',
-        description: '慢查询日志开关',
-        impact: '低',
-        reason: '建议开启慢查询日志以便性能监控'
-      },
-      {
-        key: '4',
-        category: '缓存配置',
-        parameter: 'query_cache_size',
-        currentValue: '256M',
-        recommendedValue: '256M',
-        status: 'success',
-        description: '查询缓存大小',
-        impact: '无',
-        reason: '当前配置合理'
-      },
-      {
-        key: '5',
-        category: '连接配置',
-        parameter: 'wait_timeout',
-        currentValue: '28800',
-        recommendedValue: '3600',
-        status: 'warning',
-        description: '连接超时时间',
-        impact: '中等',
-        reason: '超时时间过长，可能导致连接资源浪费'
+  useEffect(() => {
+    const fetchInstances = async () => {
+      try {
+        const response = await fetch(API_ENDPOINTS.INSTANCES);
+        if (!response.ok) throw new Error('API响应失败');
+        const data = await response.json();
+        const options = (Array.isArray(data) ? data : [])
+          // 仅展示非异常实例，视为"已连接"
+          .filter(inst => inst.status !== 'error')
+          .map(inst => ({
+            value: String(inst.id),
+            label: `${inst.instanceName} (${inst.dbType}) ${inst.host}:${inst.port}`,
+            status: inst.status
+          }));
+        setInstanceOptions(options);
+        // 如果当前选择的实例已不可用，则重置选择
+        if (selectedInstance && !options.some(o => o.value === selectedInstance)) {
+          setSelectedInstance('');
+          message.warning('所选实例已不可用，选择已重置');
+        }
+      } catch (err) {
+        console.error('获取实例列表失败:', err);
+        message.error('获取数据库实例列表失败，请检查后端服务');
+        setInstanceOptions([]);
+        if (selectedInstance) setSelectedInstance('');
       }
-    ],
-    optimizationSummary: {
-      totalItems: 5,
-      needOptimization: 3,
-      highImpact: 1,
-      mediumImpact: 2,
-      lowImpact: 1,
-      score: 72
-    }
+    };
+
+    fetchInstances();
+    const interval = setInterval(fetchInstances, 10000); // 10秒刷新一次，实时更新实例状态
+    return () => clearInterval(interval);
+  }, [selectedInstance]);
+
+  // 百分比与比值解析工具
+  const parsePercent = (s) => {
+    if (typeof s !== 'string') return null;
+    const m = s.match(/([0-9.]+)%/);
+    return m ? parseFloat(m[1]) : null;
   };
+  const calcConnPercent = (s) => {
+    if (typeof s !== 'string') return null;
+    const m = s.match(/(\d+)\/(\d+|\?)/);
+    if (m && m[2] !== '?') {
+      const used = parseInt(m[1], 10);
+      const total = parseInt(m[2], 10);
+      if (total > 0) return Math.round((used / total) * 100);
+    }
+    return null;
+  };
+
+  // 移除前端模拟配置数据，统一来自后端
+  // const mockConfigData = { ... } // removed
 
   const handleInstanceChange = (value) => {
     setSelectedInstance(value);
     setConfigData(null);
   };
 
-  const handleAnalyzeConfig = () => {
+  const handleAnalyzeConfig = async () => {
     if (!selectedInstance) {
       message.warning('请先选择数据库实例');
       return;
     }
 
     setIsAnalyzing(true);
-    
-    // 模拟分析过程
-    setTimeout(() => {
-      setConfigData(mockConfigData);
-      setIsAnalyzing(false);
+    try {
+      const resp = await fetch(API_ENDPOINTS.CONFIG_ANALYZE(selectedInstance), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      if (!resp.ok) {
+        let err = '分析接口返回错误';
+        try { const j = await resp.json(); err = j.error || err; } catch {}
+        throw new Error(err);
+      }
+      const data = await resp.json();
+      if (!data || !data.basicInfo) {
+        throw new Error('接口返回数据不完整');
+      }
+      setConfigData(data);
       message.success('配置分析完成');
-    }, 2000);
+
+      // 并行触发慢日志分析
+      try {
+        setIsSlowAnalyzing(true);
+        const sresp = await fetch(API_ENDPOINTS.SLOWLOG_ANALYZE(selectedInstance), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ top: 15, min_avg_ms: 100, tail_kb: 256 })
+        });
+        if (sresp.ok) {
+          const sdata = await sresp.json();
+          setSlowData(sdata);
+        } else {
+          try { const sj = await sresp.json(); message.warning(`慢日志分析失败：${sj.error || sresp.status}`); } catch { message.warning('慢日志分析失败'); }
+          setSlowData(null);
+        }
+      } finally {
+        setIsSlowAnalyzing(false);
+      }
+
+    } catch (e) {
+      console.error(e);
+      message.error(`配置分析失败：${e.message}`);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const handleEditConfig = (record) => {
     setEditingConfig({
       ...editingConfig,
-      [record.key]: record.recommendedValue
+      [record.parameter]: record.recommendedValue
     });
   };
 
   const handleSaveConfig = (record) => {
     message.success(`参数 ${record.parameter} 已更新`);
-    setEditingConfig({
-      ...editingConfig,
-      [record.key]: undefined
-    });
+    const next = { ...editingConfig };
+    delete next[record.parameter];
+    setEditingConfig(next);
   };
 
   const handleApplyAllOptimizations = () => {
@@ -164,6 +173,77 @@ const ConfigOptimization = () => {
       default: return null;
     }
   };
+
+  // 从配置项中提取特定参数
+  const getConfigItem = (name) => {
+    const items = configData?.configItems || [];
+    return items.find(it => it.parameter === name);
+  };
+
+  const isSlowLogEnabled = () => {
+    const slow = getConfigItem('slow_query_log');
+    const v = String(slow?.currentValue ?? '').toLowerCase();
+    return v === 'on' || v === '1' || v === 'true' || v === 'yes';
+  };
+
+  // 指标实时刷新（SSE）
+  useEffect(() => {
+    // 仅在已选择实例且已有分析结果时启动实时指标刷新
+    if (!selectedInstance || !configData) return;
+
+    const service = 'mysqld'; // 目前后端默认以服务名过滤，可按需从实例映射
+    const url = `${API_BASE_URL}/api/metrics/stream?service=${encodeURIComponent(service)}&interval=5`;
+    let es;
+
+    try {
+      es = new EventSource(url);
+
+      const applyMetrics = (metrics) => {
+        setConfigData((prev) => {
+          if (!prev) return prev;
+          const memStr = typeof metrics?.memory_usage === 'number' ? `${metrics.memory_usage}%` : prev.basicInfo.memoryUsage;
+          let diskStr = prev.basicInfo.diskUsage;
+          if (metrics?.disk_usage && typeof metrics.disk_usage.usage_percent === 'number') {
+            const p = metrics.disk_usage.usage_percent;
+            const display = metrics.disk_usage.storage_display;
+            diskStr = display ? `${p}% (${display})` : `${p}%`;
+          }
+          return {
+            ...prev,
+            basicInfo: {
+              ...prev.basicInfo,
+              memoryUsage: memStr,
+              diskUsage: diskStr,
+            }
+          };
+        });
+      };
+
+      es.addEventListener('metrics', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          applyMetrics(data);
+        } catch (_) {
+          // ignore parse errors
+        }
+      });
+
+      // 可选：监听打开与错误事件
+      es.addEventListener('open', () => {
+        // console.debug('SSE opened');
+      });
+      es.addEventListener('error', () => {
+        // console.warn('SSE error');
+      });
+    } catch (err) {
+      // 在不支持 SSE 的环境中静默失败
+      console.warn('SSE 初始化失败', err);
+    }
+
+    return () => {
+      if (es) es.close();
+    };
+  }, [selectedInstance, configData]);
 
   const configColumns = [
     {
@@ -201,29 +281,16 @@ const ConfigOptimization = () => {
       dataIndex: 'recommendedValue',
       key: 'recommendedValue',
       width: 120,
-      render: (text, record) => {
-        const isEditing = editingConfig[record.key] !== undefined;
-        return isEditing ? (
-          <Input
-            size="small"
-            value={editingConfig[record.key]}
-            onChange={(e) => setEditingConfig({
-              ...editingConfig,
-              [record.key]: e.target.value
-            })}
-            style={{ width: 100 }}
-          />
-        ) : (
-          <code style={{ 
-            backgroundColor: record.status === 'success' ? '#f6ffed' : '#fff2e8', 
-            padding: '2px 6px', 
-            borderRadius: 4,
-            color: record.status === 'success' ? '#52c41a' : '#fa8c16'
-          }}>
-            {text}
-          </code>
-        );
-      }
+      render: (text, record) => (
+        <code style={{ 
+          backgroundColor: record.status === 'success' ? '#f6ffed' : '#fff2e8', 
+          padding: '2px 6px', 
+          borderRadius: 4,
+          color: record.status === 'success' ? '#52c41a' : '#fa8c16'
+        }}>
+          {text}
+        </code>
+      )
     },
     {
       title: '状态',
@@ -245,42 +312,12 @@ const ConfigOptimization = () => {
         const color = impact === '高' ? 'red' : impact === '中等' ? 'orange' : impact === '低' ? 'blue' : 'default';
         return <Tag color={color}>{impact}</Tag>;
       }
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 120,
-      render: (_, record) => {
-        const isEditing = editingConfig[record.key] !== undefined;
-        return (
-          <Space size="small">
-            {isEditing ? (
-              <Button
-                size="small"
-                type="primary"
-                icon={<SaveOutlined />}
-                onClick={() => handleSaveConfig(record)}
-              >
-                保存
-              </Button>
-            ) : (
-              <Button
-                size="small"
-                icon={<EditOutlined />}
-                onClick={() => handleEditConfig(record)}
-                disabled={record.status === 'success'}
-              >
-                编辑
-              </Button>
-            )}
-          </Space>
-        );
-      }
     }
+    // 已删除“操作”列
   ];
 
   return (
-    <div>
+    <div className="fade-in-up">
       {/* 页面标题 */}
       <div className="page-header">
         <h1>配置优化</h1>
@@ -295,15 +332,15 @@ const ConfigOptimization = () => {
               <span style={{ fontWeight: 500, marginRight: 12 }}>选择实例:</span>
               <Select
                 placeholder="请选择要分析的实例"
-                style={{ width: 300 }}
+                style={{ width: 360 }}
                 value={selectedInstance}
                 onChange={handleInstanceChange}
+                notFoundContent="暂无可用实例"
+                loading={!instanceOptions.length}
               >
                 {instanceOptions.map(option => (
                   <Option key={option.value} value={option.value}>
-                    <DatabaseOutlined style={{ marginRight: 8 }} />
                     {option.label}
-                    <span style={{ color: '#8c8c8c', marginLeft: 8 }}>({option.type})</span>
                   </Option>
                 ))}
               </Select>
@@ -340,7 +377,9 @@ const ConfigOptimization = () => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 24 }}>
               <Descriptions column={1} size="small">
                 <Descriptions.Item label="实例名称">{configData.basicInfo.instanceName}</Descriptions.Item>
-                <Descriptions.Item label="版本">{configData.basicInfo.version}</Descriptions.Item>
+                {/* 移除版本显示以保持一致 */}
+                <Descriptions.Item label="实例类型">{configData.basicInfo.type}</Descriptions.Item>
+                {/* 移除版本显示以保持一致 */}
                 <Descriptions.Item label="运行时间">{configData.basicInfo.uptime}</Descriptions.Item>
               </Descriptions>
               
@@ -350,23 +389,32 @@ const ConfigOptimization = () => {
                     <span>连接数</span>
                     <span>{configData.basicInfo.connections}</span>
                   </div>
-                  <Progress percent={15.6} size="small" />
+                  <Progress percent={calcConnPercent(configData.basicInfo.connections) || 0} size="small" />
                 </div>
                 
                 <div style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span>内存使用</span>
-                    <span>{configData.basicInfo.memoryUsage}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <span>慢查询日志</span>
+                    <Tag color={isSlowLogEnabled() ? 'green' : 'red'}>
+                      {isSlowLogEnabled() ? '已开启' : '未开启'}
+                    </Tag>
                   </div>
-                  <Progress percent={68} size="small" status="active" />
                 </div>
                 
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span>磁盘使用</span>
-                    <span>{configData.basicInfo.diskUsage}</span>
+                    <span>缓冲池大小</span>
+                    <span>
+                      <code style={{ backgroundColor: '#f5f5f5', padding: '2px 6px', borderRadius: 4 }}>
+                        {getConfigItem('innodb_buffer_pool_size')?.currentValue || '未知'}
+                      </code>
+                      <span style={{ color: '#8c8c8c', margin: '0 6px' }}>/</span>
+                      <span style={{ color: '#8c8c8c' }}>建议</span>
+                      <code style={{ backgroundColor: '#fff2e8', padding: '2px 6px', borderRadius: 4, marginLeft: 6 }}>
+                        {getConfigItem('innodb_buffer_pool_size')?.recommendedValue || '—'}
+                      </code>
+                    </span>
                   </div>
-                  <Progress percent={45} size="small" />
                 </div>
               </div>
               
@@ -396,19 +444,71 @@ const ConfigOptimization = () => {
             </div>
           </Card>
 
+          {/* 慢查询分析 */}
+          <Card title="慢查询分析" className="content-card" style={{ marginBottom: 24 }} extra={isSlowAnalyzing ? <Tag color="processing">分析中</Tag> : null}>
+            {!slowData ? (
+              <div style={{ color: '#8c8c8c' }}>尚无慢日志分析结果。{isSlowAnalyzing ? '' : '请点击开始分析后自动生成。'}</div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
+                <div>
+                  <Descriptions size="small" column={3} bordered>
+                    <Descriptions.Item label="performance_schema">{slowData.overview?.performance_schema || 'N/A'}</Descriptions.Item>
+                    <Descriptions.Item label="slow_query_log">{slowData.overview?.slow_query_log || 'N/A'}</Descriptions.Item>
+                    <Descriptions.Item label="long_query_time">{String(slowData.overview?.long_query_time ?? 'N/A')}</Descriptions.Item>
+                    <Descriptions.Item label="log_output">{slowData.overview?.log_output || 'N/A'}</Descriptions.Item>
+                    <Descriptions.Item label="slow_log_file" span={2}><code>{slowData.overview?.slow_query_log_file || 'N/A'}</code></Descriptions.Item>
+                  </Descriptions>
+                </div>
+
+                {Array.isArray(slowData.warnings) && slowData.warnings.length > 0 && (
+                  <Alert type="warning" showIcon message={slowData.warnings.join('；')} />
+                )}
+
+                <div>
+                  <h3 style={{ marginBottom: 8 }}>Top SQL 指纹（来自 performance_schema）</h3>
+                  <Table
+                    size="small"
+                    rowKey={(r) => r.digest + r.schema}
+                    dataSource={slowData.ps_top || []}
+                    pagination={{ pageSize: 8 }}
+                    columns={[
+                      { title: 'Schema', dataIndex: 'schema', key: 'schema', width: 120 },
+                      { title: '指纹', dataIndex: 'query', key: 'query', ellipsis: true },
+                      { title: '次数', dataIndex: 'count', key: 'count', width: 80 },
+                      { title: '平均耗时(ms)', dataIndex: 'avg_latency_ms', key: 'avg_latency_ms', width: 140 },
+                      { title: '总耗时(ms)', dataIndex: 'total_latency_ms', key: 'total_latency_ms', width: 140 },
+                      { title: 'RowsExamined(avg)', dataIndex: 'rows_examined_avg', key: 'rows_examined_avg', width: 160 },
+                      { title: 'RowsSent(avg)', dataIndex: 'rows_sent_avg', key: 'rows_sent_avg', width: 140 },
+                    ]}
+                  />
+                </div>
+
+                <div>
+                  <h3 style={{ marginBottom: 8 }}>文件抽样（尾部解析）</h3>
+                  <Table
+                    size="small"
+                    rowKey={(r, idx) => String(idx)}
+                    dataSource={slowData.file_samples || []}
+                    pagination={{ pageSize: 5 }}
+                    columns={[
+                      { title: '时间', dataIndex: 'time', key: 'time', width: 180 },
+                      { title: 'DB', dataIndex: 'db', key: 'db', width: 120 },
+                      { title: '查询耗时(ms)', dataIndex: 'query_time_ms', key: 'query_time_ms', width: 140 },
+                      { title: '锁等待(ms)', dataIndex: 'lock_time_ms', key: 'lock_time_ms', width: 120 },
+                      { title: 'Rows_sent', dataIndex: 'rows_sent', key: 'rows_sent', width: 100 },
+                      { title: 'Rows_examined', dataIndex: 'rows_examined', key: 'rows_examined', width: 120 },
+                      { title: 'SQL', dataIndex: 'sql', key: 'sql', ellipsis: true },
+                    ]}
+                  />
+                </div>
+              </div>
+            )}
+          </Card>
+
           {/* 配置详情 */}
           <Card 
             title="配置参数详情" 
             className="content-card"
-            extra={
-              <Button 
-                type="primary" 
-                icon={<SettingOutlined />}
-                onClick={handleApplyAllOptimizations}
-              >
-                应用所有优化
-              </Button>
-            }
           >
             <Alert
               message="配置优化建议"
@@ -421,6 +521,7 @@ const ConfigOptimization = () => {
             <Table
               columns={configColumns}
               dataSource={configData.configItems}
+              rowKey={(r) => r.parameter}
               pagination={false}
               size="middle"
               expandable={{

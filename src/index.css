@@ -524,26 +524,82 @@ body {
   background: #ff4d4f;
 }
 
-.sql-editor {
-  border: 1px solid #d9d9d9;
-  border-radius: 6px;
-  min-height: 300px;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 14px;
-  line-height: 1.6;
-  padding: 12px;
-  background-color: #fafafa;
-  resize: vertical;
-  transition: border-color 0.3s, box-shadow 0.3s;
+/* SQL 编辑器更强样式覆盖（确保对 AntD Input.TextArea 生效） */
+.sql-editor,
+.ant-input.sql-editor {
+  border: 1px solid #d0d6e0 !important;
+  border-radius: 10px !important;
+  min-height: 120px;
+  font-family: 'Fira Code', 'JetBrains Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  padding: 14px 16px !important;
+  background-color: #fbfcff !important;
+  color: var(--text-color);
+  resize: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
-.sql-editor:focus {
-  border-color: #40a9ff;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+/* 焦点态更明显 */
+.sql-editor:focus,
+.ant-input.sql-editor:focus {
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2) !important;
   outline: none;
+  background-color: #ffffff !important;
 }
 
-/* 动画效果 */
+/* 占位符颜色 */
+.sql-editor::placeholder {
+  color: #bfbfbf !important;
+}
+
+/* 兼容深色偏好 */
+@media (prefers-color-scheme: dark) {
+  .sql-editor,
+  .ant-input.sql-editor {
+    background-color: #1f1f1f !important;
+    border-color: #3a3a3a !important;
+  }
+  .sql-editor:focus,
+  .ant-input.sql-editor:focus {
+    background-color: #141414 !important;
+  }
+}
+
+/* 表格增强：条纹行、紧凑密度、fixed 布局更佳展示宽列 */
+.ant-table-striped .table-row-light td {
+  background: #ffffff;
+}
+.ant-table-striped .table-row-dark td {
+  background: #fafafa;
+}
+.ant-table-thead > tr > th {
+  background: #f8f9fb !important;
+  color: #262626;
+  font-weight: 600;
+}
+.ant-table-cell {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+/* Tabs header 微调，增强可读性 */
+.ant-tabs-tab {
+  padding: 10px 16px !important;
+}
+.ant-tabs-ink-bar {
+  height: 2px;
+}
+
+/* 工具栏按钮组在小屏保持换行与间距 */
+@media (max-width: 992px) {
+  .toolbar-wrap {
+    gap: 8px;
+  }
+}
+
 .fade-in {
   animation: fadeIn 0.3s ease-in-out;
 }
@@ -777,4 +833,351 @@ body {
   .ant-card-head-title {
     font-size: 14px;
   }
+}
+
+/* --- Tree styles for SQLConsole --- */
+.modern-tree.db-tree {
+  --tree-bg: #ffffff;
+  --tree-border: #d9d9d9;
+  --tree-text: #262626;
+  --tree-muted: #8c8c8c;
+  --tree-accent: #1890ff;
+  --tree-accent-2: #52c41a;
+  --tree-hover: #f0f8ff;
+  --tree-selected: #e6f7ff;
+  --system-color: #722ed1;
+  
+  background: var(--tree-bg);
+  border: 1px solid var(--tree-border);
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* Reset tree node styling */
+.modern-tree.db-tree .ant-tree-treenode {
+  position: relative;
+  padding: 0;
+  margin: 0;
+}
+
+/* Tree node content wrapper - main clickable area */
+.modern-tree.db-tree .ant-tree-node-content-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 4px 12px;
+  margin: 2px 4px;
+  color: var(--tree-text);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.modern-tree.db-tree .ant-tree-node-content-wrapper:hover {
+  background-color: var(--tree-hover);
+  transform: translateX(2px);
+  box-shadow: 0 2px 4px rgba(24, 144, 255, 0.1);
+}
+
+.modern-tree.db-tree .ant-tree-node-selected .ant-tree-node-content-wrapper {
+  background-color: var(--tree-selected);
+  color: var(--tree-accent);
+  border: 1px solid rgba(24, 144, 255, 0.3);
+  font-weight: 500;
+}
+
+/* Switcher (expand/collapse arrow) */
+.modern-tree.db-tree .ant-tree-switcher {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 28px;
+  margin-right: 4px;
+  cursor: pointer;
+}
+
+/* Custom switcher icon styling */
+.switcher-icon {
+  color: var(--tree-muted);
+  font-size: 12px;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.switcher-icon.expanded {
+  transform: rotate(90deg);
+  color: var(--tree-accent);
+}
+
+/* Tree structure lines removed for cleaner appearance */
+
+/* Custom node content styling */
+.db-tree-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+/* Database icons */
+.db-tree .db-icon {
+  font-size: 18px;
+  color: var(--tree-accent);
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.db-tree .db-icon.system {
+  color: var(--system-color);
+}
+
+.modern-tree.db-tree .ant-tree-node-content-wrapper:hover .db-icon {
+  transform: scale(1.1);
+}
+
+/* Database and table names/* 数据库和表名称：允许完整显示 */
+.db-tree .db-name,
+.db-tree .table-name {
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  font-size: 14px;
+  flex: 1;
+  min-width: max-content;
+}
+
+.db-tree .db-name.system {
+  color: var(--tree-muted);
+  font-style: italic;
+}
+
+/* System database tag */
+.db-tree .db-tag {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--system-color);
+  background: linear-gradient(135deg, rgba(114, 46, 209, 0.1), rgba(114, 46, 209, 0.15));
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(114, 46, 209, 0.3);
+  flex-shrink: 0;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.db-tree .db-tag:hover {
+  background: linear-gradient(135deg, rgba(114, 46, 209, 0.15), rgba(114, 46, 209, 0.2));
+  transform: scale(1.05);
+}
+
+/* Table node specific styling */
+.db-tree .table-name {
+  color: var(--tree-text);
+}
+
+.modern-tree.db-tree .ant-tree-treenode[data-level="1"] .ant-tree-node-content-wrapper {
+  padding-left: 32px;
+}
+
+.modern-tree.db-tree .ant-tree-treenode[data-level="2"] .ant-tree-node-content-wrapper {
+  padding-left: 56px;
+}
+
+/* Table schema link */
+.db-tree .table-node .schema-link {
+  color: var(--tree-muted);
+  font-size: 12px;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.db-tree .table-node:hover .schema-link {
+  opacity: 1;
+}
+
+.db-tree .table-node .schema-link:hover {
+  color: var(--tree-accent);
+}
+
+/* 删除紧凑模式相关样式，统一使用标准高度与缩进 */
+/* Compact mode modifications removed for simplification */
+
+/* Virtual scrolling compatibility */
+.modern-tree.db-tree .ant-tree-list-holder-inner .ant-tree-treenode {
+  height: 36px;
+  margin-bottom: 2px;
+}
+
+.modern-tree.db-tree .ant-tree-switcher {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 28px;
+  margin-right: 4px;
+  cursor: pointer;
+}
+
+/* Custom switcher icon styling */
+.switcher-icon {
+  color: var(--tree-muted);
+  font-size: 12px;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.switcher-icon.expanded {
+  transform: rotate(90deg);
+  color: var(--tree-accent);
+}
+
+/* Removed tree guide lines pseudo-element */
+
+/* Removed last-child vertical line override (no longer needed) */
+
+/* Removed horizontal connector line on switcher */
+
+/* Tree indent styling for proper hierarchy display */
+.modern-tree.db-tree .ant-tree-treenode {
+  padding-left: 0;
+}
+
+.modern-tree.db-tree .ant-tree-treenode[data-level="0"] .ant-tree-node-content-wrapper {
+  padding-left: 8px;
+}
+
+.modern-tree.db-tree .ant-tree-treenode[data-level="1"] .ant-tree-node-content-wrapper {
+  padding-left: 32px;
+}
+
+.modern-tree.db-tree .ant-tree-treenode[data-level="2"] .ant-tree-node-content-wrapper {
+  padding-left: 56px;
+}
+
+.modern-tree.db-tree .ant-tree-treenode[data-level="3"] .ant-tree-node-content-wrapper {
+  padding-left: 80px;
+}
+
+/* Custom node content styling */
+.db-tree-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+/* Database icons */
+.db-tree .db-icon {
+  font-size: 16px;
+  color: var(--tree-accent);
+  flex-shrink: 0;
+}
+
+.db-tree .db-icon.system {
+  color: var(--system-color);
+}
+
+/* Database and table names */
+/* 数据库和表名称：允许完整显示（去除省略号） */
+.db-tree .db-name,
+.db-tree .table-name {
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  font-size: 14px;
+  flex: 1;
+  min-width: max-content;
+}
+
+.db-tree .db-name.system {
+  color: var(--tree-muted);
+  font-style: italic;
+}
+
+/* System database tag - removed duplicate definition */
+
+/* Table node specific styling */
+.db-tree .table-name {
+  color: var(--tree-text);
+}
+
+.modern-tree.db-tree .ant-tree-treenode[data-level="1"] .ant-tree-node-content-wrapper {
+  padding-left: 32px;
+}
+
+.modern-tree.db-tree .ant-tree-treenode[data-level="2"] .ant-tree-node-content-wrapper {
+  padding-left: 56px;
+}
+
+/* Table schema link */
+.db-tree .table-node .schema-link {
+  color: var(--tree-muted);
+  font-size: 12px;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.db-tree .table-node:hover .schema-link {
+  opacity: 1;
+}
+
+.db-tree .table-node .schema-link:hover {
+  color: var(--tree-accent);
+}
+
+/* 允许横向滚动完整展示树节点文本 */
+.db-tree-scroll-inner {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 680px; /* 固定高度 */
+  overflow-y: auto; /* 内容超出竖向滚动 */
+  overflow-x: auto; /* 内容超出横向滚动，滚动条位于底端 */
+}
+
+/* 让白色树盒子充满容器高度，保持固定白色区域 */
+.modern-tree.db-tree {
+  height: 100%;
+  overflow-x: auto; /* 允许横向滚动查看完整名称 */
+}
+
+/* Tree 内部容器宽度自适应内容，配合横向滚动 */
+.modern-tree.db-tree .ant-tree-list-holder-inner {
+  width: max-content;
+}
+
+/* 展开时不截断名称，交给外层滚动处理（去除省略号，允许完整显示） */
+.db-tree .db-name,
+.db-tree .table-name {
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+/* 内容包装器允许内容完整展示，宽度随内容自适应 */
+.modern-tree.db-tree .ant-tree-node-content-wrapper {
+  overflow: visible;
+  width: max-content;
+}
+/* SQL 编辑器根容器覆盖（AntD v5） */
+.ant-input-textarea.sql-editor-root {
+  border-radius: 12px !important;
+}
+.ant-input-textarea.sql-editor-root .ant-input {
+  background-color: #f4f8ff !important;
+  border: 1px solid #91caff !important;
+  border-radius: 12px !important;
+  padding: 16px !important;
+}
+.ant-input-textarea.sql-editor-root .ant-input:focus {
+  border-color: #1677ff !important;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.2) !important;
 }

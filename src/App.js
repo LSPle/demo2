@@ -10,6 +10,7 @@ import SQLOptimization from './pages/SQLOptimization';
 import SQLConsole from './pages/SQLConsole';
 import ConfigOptimization from './pages/ConfigOptimization';
 import Login from './pages/Login';
+import ArchitectureOptimization from './pages/ArchitectureOptimization';
 
 const { Content } = Layout;
 
@@ -52,6 +53,7 @@ function App() {
         <Route path="/sql-optimization" element={<SQLOptimization />} />
         <Route path="/sql-console" element={<SQLConsole />} />
         <Route path="/config-optimization" element={<ConfigOptimization />} />
+        <Route path="/architecture" element={<ArchitectureOptimization />} />
         <Route path="/login" element={<Login />} />
       </Routes>
     </AppLayout>

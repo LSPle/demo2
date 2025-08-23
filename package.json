@@ -7,7 +7,10 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "backend": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location backend; .\\.venv\\Scripts\\python.exe .\\run.py\"",
+    "frontend": "set PORT=3000&& react-scripts start",
+    "dev": "npx concurrently -n \"backend,frontend\" -c \"blue,green\" \"npm:backend\" \"npm:frontend\""
   },
   "dependencies": {
     "@ant-design/icons": "^5.0.1",
@@ -22,7 +25,8 @@
   "devDependencies": {
     "@types/react": "^18.0.27",
     "@types/react-dom": "^18.0.10",
-    "@types/styled-components": "^5.1.26"
+    "@types/styled-components": "^5.1.26",
+    "http-proxy-middleware": "^2.0.6"
   },
   "browserslist": {
     "production": [
@@ -35,5 +39,6 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  }
+  },
+  "proxy": "http://localhost:5001"
 }

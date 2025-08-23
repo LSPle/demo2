@@ -1,0 +1,16 @@
+Flask==2.3.3
+Flask-SQLAlchemy==3.0.5
+Flask-CORS==4.0.0
+Flask-RESTful==0.3.10
+Flask-JWT-Extended==4.5.3
+python-dotenv==1.0.0
+PyMySQL==1.1.0
+SQLAlchemy==2.0.36
+marshmallow==3.20.1
+Flask-Marshmallow==0.15.0
+marshmallow-sqlalchemy==0.29.0
+Werkzeug==2.3.7
+cryptography==41.0.4
+bcrypt==4.0.1
+requests==2.32.3
+sqlparse==0.4.4

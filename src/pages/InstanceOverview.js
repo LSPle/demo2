@@ -1,96 +1,130 @@
-import React from 'react';
-import { Card, Table, Tag, Progress, Space, Button } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Card, Table, Tag, Progress, Space, Button, message } from 'antd';
 import {
   DatabaseOutlined,
   PlayCircleOutlined,
   WarningOutlined,
   ExclamationCircleOutlined,
-  EyeOutlined,
-  SettingOutlined,
   ArrowUpOutlined,
   ArrowDownOutlined
 } from '@ant-design/icons';
+import { API_ENDPOINTS } from '../config/api';
 
 const InstanceOverview = () => {
-  // 统计数据
-  const statsData = [
+  // 状态管理
+  const [instanceData, setInstanceData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [statsData, setStatsData] = useState([
     {
       title: '总实例数',
-      value: 12,
-      trend: { type: 'up', value: 2, text: '较上月增长 2' },
+      value: 0,
       color: '#1890ff',
-      icon: <DatabaseOutlined />
+      icon: <DatabaseOutlined />,
+      trend: { text: '—', type: 'up' }
     },
     {
       title: '运行中',
-      value: 10,
-      trend: { type: 'up', value: 83, text: '正常运行率 83%' },
+      value: 0,
       color: '#52c41a',
-      icon: <PlayCircleOutlined />
+      icon: <PlayCircleOutlined />,
+      trend: { text: '—', type: 'up' }
     },
     {
       title: '需要优化',
-      value: 3,
-      trend: { type: 'warning', text: '需及时处理' },
+      value: 0,
       color: '#faad14',
-      icon: <WarningOutlined />
+      icon: <WarningOutlined />,
+      trend: { text: '—', type: 'down' }
     },
     {
       title: '异常实例',
-      value: 2,
-      trend: { type: 'down', value: 1, text: '较昨日增加 1' },
+      value: 0,
       color: '#ff4d4f',
-      icon: <ExclamationCircleOutlined />
+      icon: <ExclamationCircleOutlined />,
+      trend: { text: '—', type: 'down' }
     }
+  ]);
+
+  const eventSourceRef = null; // Disabled: SSE connection closed per Plan A
+
+  // 模拟后端API数据（包含指定的测试实例）
+  const mockApiData = [
+    // 已移除：不再使用前端模拟数据，避免展示非真实实例
   ];
 
-  // 实例数据
-  const instanceData = [
-    {
-      key: '1',
-      name: '主数据库-生产环境',
-      ip: '192.168.1.101:3306',
-      type: 'MySQL',
-      version: '8.0.23',
-      status: 'running',
-      cpuUsage: 35,
-      memoryUsage: 65,
-      storage: '120GB / 200GB'
-    },
-    {
-      key: '2',
-      name: '从数据库-生产环境',
-      ip: '192.168.1.102:3306',
-      type: 'MySQL',
-      version: '8.0.23',
-      status: 'running',
-      cpuUsage: 28,
-      memoryUsage: 45,
-      storage: '100GB / 200GB'
-    },
-    {
-      key: '3',
-      name: 'Redis缓存集群',
-      ip: '192.168.1.105:6379',
-      type: 'Redis',
-      version: '6.2.5',
-      status: 'warning',
-      cpuUsage: 78,
-      memoryUsage: 92,
-      storage: '45GB / 50GB'
-    },
-    {
-      key: '4',
-      name: 'MongoDB-日志数据库',
-      ip: '192.168.1.108:27017',
-      type: 'MongoDB',
-      version: '5.0.3',
-      status: 'error',
-      cpuUsage: 95,
-      memoryUsage: 98,
-      storage: '190GB / 200GB'
+  // 从后端获取实例数据（包含实时指标）
+  const fetchInstanceData = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(API_ENDPOINTS.INSTANCES);
+      if (!response.ok) throw new Error('API响应失败');
+      const data = await response.json();
+      processInstanceData(data);
+    } catch (error) {
+      console.error('获取实例数据失败:', error);
+      message.error('获取实例数据失败，请检查后端服务');
+      setInstanceData([]);
+      updateStatsData([]);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  // 处理实例数据
+  const processInstanceData = (data) => {
+    // 转换后端数据格式以匹配前端展示需求
+    const formattedData = data.map(instance => ({
+      key: instance.id,
+      name: instance.instanceName,
+      ip: `${instance.host}:${instance.port}`,
+      type: instance.dbType,
+      status: instance.status,
+      cpuUsage: instance.cpuUsage,
+      memoryUsage: instance.memoryUsage,
+      storage: instance.storage,
+      connectionInfo: {
+        host: instance.host,
+        port: instance.port,
+        username: instance.username,
+        password: instance.password
+      }
+    }));
+    
+    setInstanceData(formattedData);
+    
+    // 更新统计数据
+    updateStatsData(formattedData);
+  };
+
+  // 更新统计数据
+  const updateStatsData = (instances) => {
+    const totalCount = instances.length;
+    const runningCount = instances.filter(item => item.status === 'running').length;
+    const warningCount = instances.filter(item => item.status === 'warning').length;
+    const errorCount = instances.filter(item => item.status === 'error').length;
+
+    setStatsData(prevStats => prevStats.map((stat, index) => {
+      const values = [totalCount, runningCount, warningCount, errorCount];
+      return {
+        ...stat,
+        value: values[index]
+      };
+    }));
+  };
+
+  // 组件挂载时获取数据，并设置更频繁的轮询（每10秒）
+  useEffect(() => {
+    fetchInstanceData();
+    const interval = setInterval(fetchInstanceData, 10000);
+
+
+    return () => {
+      clearInterval(interval);
+      // if (eventSourceRef.current) { eventSourceRef.current.close(); eventSourceRef.current = null; }
+    };
+  }, []);
+
+  
 
   const getStatusTag = (status) => {
     const statusMap = {
@@ -128,66 +162,49 @@ const InstanceOverview = () => {
       dataIndex: 'type',
       key: 'type'
     },
-    {
-      title: '版本',
-      dataIndex: 'version',
-      key: 'version'
-    },
+    // 移除版本列
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
       render: getStatusTag
     },
-    {
-      title: 'CPU使用率',
-      dataIndex: 'cpuUsage',
-      key: 'cpuUsage',
-      render: (value) => (
-        <div style={{ width: 100 }}>
-          <Progress
-            percent={value}
-            size="small"
-            strokeColor={getProgressColor(value)}
-            format={(percent) => `${percent}%`}
-          />
-        </div>
-      )
-    },
-    {
-      title: '内存使用率',
-      dataIndex: 'memoryUsage',
-      key: 'memoryUsage',
-      render: (value) => (
-        <div style={{ width: 100 }}>
-          <Progress
-            percent={value}
-            size="small"
-            strokeColor={getProgressColor(value)}
-            format={(percent) => `${percent}%`}
-          />
-        </div>
-      )
-    },
-    {
-      title: '存储',
-      dataIndex: 'storage',
-      key: 'storage'
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: () => (
-        <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />}>
-            查看
-          </Button>
-          <Button type="link" size="small" icon={<SettingOutlined />}>
-            配置
-          </Button>
-        </Space>
-      )
-    }
+    // Plan A: Hide CPU/Memory/Storage columns
+    // {
+    //   title: 'CPU使用率',
+    //   dataIndex: 'cpuUsage',
+    //   key: 'cpuUsage',
+    //   render: (value) => (
+    //     <div style={{ width: 100 }}>
+    //       <Progress
+    //         percent={value}
+    //         size="small"
+    //         strokeColor={getProgressColor(value)}
+    //         format={(percent) => `${percent}%`}
+    //       />
+    //     </div>
+    //   )
+    // },
+    // {
+    //   title: '内存使用率',
+    //   dataIndex: 'memoryUsage',
+    //   key: 'memoryUsage',
+    //   render: (value) => (
+    //     <div style={{ width: 100 }}>
+    //       <Progress
+    //         percent={value}
+    //         size="small"
+    //         strokeColor={getProgressColor(value)}
+    //         format={(percent) => `${percent}%`}
+    //       />
+    //     </div>
+    //   )
+    // },
+    // {
+    //   title: '存储',
+    //   dataIndex: 'storage',
+    //   key: 'storage'
+    // }
   ];
 
   return (
@@ -251,33 +268,6 @@ const InstanceOverview = () => {
       {/* 数据库实例列表 */}
       <Card
         title="数据库实例列表"
-        extra={
-          <Space>
-            <Button 
-              type="primary" 
-              icon={<EyeOutlined />}
-              className="fade-in-right"
-              style={{
-                borderRadius: '8px',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                border: 'none',
-                boxShadow: '0 4px 15px rgba(102, 126, 234, 0.3)'
-              }}
-            >
-              查看详情
-            </Button>
-            <Button 
-              icon={<SettingOutlined />}
-              className="fade-in-right"
-              style={{
-                borderRadius: '8px',
-                animationDelay: '0.1s'
-              }}
-            >
-              管理实例
-            </Button>
-          </Space>
-        }
         className="content-card fade-in-up"
         style={{
           animationDelay: '0.4s'
@@ -286,6 +276,7 @@ const InstanceOverview = () => {
         <Table
           columns={columns}
           dataSource={instanceData}
+          loading={loading}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
