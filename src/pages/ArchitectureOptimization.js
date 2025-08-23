@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Select, Button, Space, Descriptions, Tag, Table, message, Divider, Tooltip, Alert } from 'antd';
 // 移除图标模块（根据用户需求删除图中的模块）
-// import { PartitionOutlined } from '@ant-design/icons';
 import { DatabaseOutlined } from '@ant-design/icons';
 import API_BASE_URL, { API_ENDPOINTS } from '../config/api';
 

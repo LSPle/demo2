@@ -11,16 +11,11 @@ import {
 import API_BASE_URL, { API_ENDPOINTS } from '../config/api';
 
 const { Option } = Select;
-// 不再使用 Tabs.TabPane，保持 items API 统一
-// const { TabPane } = Tabs;
-// 移除未使用的 TextArea
-// const { TextArea } = Input;
 
 const ConfigOptimization = () => {
   const [selectedInstance, setSelectedInstance] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [configData, setConfigData] = useState(null);
-  // const [editingConfig, setEditingConfig] = useState({}); // 移除编辑模式
   // 新增：慢日志分析状态与数据，避免引用未定义
   const [slowData, setSlowData] = useState(null);
   const [isSlowAnalyzing, setIsSlowAnalyzing] = useState(false);
@@ -79,7 +74,6 @@ const ConfigOptimization = () => {
   };
 
   // 移除前端模拟配置数据，统一来自后端
-  // const mockConfigData = { ... } // removed
 
   const handleInstanceChange = (value) => {
     setSelectedInstance(value);

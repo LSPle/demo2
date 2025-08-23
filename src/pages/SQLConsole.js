@@ -14,8 +14,6 @@ import {
 import { API_ENDPOINTS } from '../config/api';
 const { TextArea } = Input;
 const { Option } = Select;
-// 已迁移至 items API，移除 TabPane 解构
-// -const { TabPane } = Tabs;
 
 const SQLConsole = () => {
   // 实例与数据库/表
@@ -62,34 +60,6 @@ const SQLConsole = () => {
     fetchInstances();
   }, []);
 
-  // 左侧树区域高度自适应
-  // 已改为固定高度，移除动态测量逻辑
-  // useEffect(() => {
-  //   const cardEl = leftCardRef.current;
-  //   if (!cardEl) return;
-  //   const bodyEl = cardEl.querySelector('.ant-card-body');
-  //   if (!bodyEl) return;
-
-  //   const measure = () => {
-  //     try {
-  //       const h = bodyEl.clientHeight || 0;
-  //       setTreeHeight(Math.max(160, h));
-  //     } catch {}
-  //   };
-
-  //   // 首次测量
-  //   measure();
-
-  //   // 监听尺寸变化
-  //   const ro = new ResizeObserver(measure);
-  //   ro.observe(bodyEl);
-  //   window.addEventListener('resize', measure);
-
-  //   return () => {
-  //     try { ro.disconnect(); } catch {}
-  //     window.removeEventListener('resize', measure);
-  //   };
-  // }, []);
 
   const fetchDatabases = async (instId) => {
     if (!instId) return;

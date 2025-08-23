@@ -120,7 +120,6 @@ const InstanceOverview = () => {
 
     return () => {
       clearInterval(interval);
-      // if (eventSourceRef.current) { eventSourceRef.current.close(); eventSourceRef.current = null; }
     };
   }, []);
 
@@ -169,42 +168,6 @@ const InstanceOverview = () => {
       key: 'status',
       render: getStatusTag
     },
-    // Plan A: Hide CPU/Memory/Storage columns
-    // {
-    //   title: 'CPU使用率',
-    //   dataIndex: 'cpuUsage',
-    //   key: 'cpuUsage',
-    //   render: (value) => (
-    //     <div style={{ width: 100 }}>
-    //       <Progress
-    //         percent={value}
-    //         size="small"
-    //         strokeColor={getProgressColor(value)}
-    //         format={(percent) => `${percent}%`}
-    //       />
-    //     </div>
-    //   )
-    // },
-    // {
-    //   title: '内存使用率',
-    //   dataIndex: 'memoryUsage',
-    //   key: 'memoryUsage',
-    //   render: (value) => (
-    //     <div style={{ width: 100 }}>
-    //       <Progress
-    //         percent={value}
-    //         size="small"
-    //         strokeColor={getProgressColor(value)}
-    //         format={(percent) => `${percent}%`}
-    //       />
-    //     </div>
-    //   )
-    // },
-    // {
-    //   title: '存储',
-    //   dataIndex: 'storage',
-    //   key: 'storage'
-    // }
   ];
 
   return (

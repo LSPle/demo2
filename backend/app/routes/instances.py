@@ -172,39 +172,6 @@ def list_instance_databases(instance_id):
     except Exception as e:
         return jsonify({'error': f'服务器错误: {e}'}), 500
 
-# 初始化一条真实数据（若不存在）
-@instances_bp.before_app_request
-def ensure_seed_instance():
-    # 仅在应用上下文中且表存在时执行
-    if Instance.query.count() == 0:
-        # 添加用户要求的真实测试实例（移除version）
-        seed = {
-            'instance_name': 'MySQL主库',
-            'host': '127.0.0.1',
-            'port': 3306,
-            'username': 'root',
-            'password': '123456',  # 仅演示用途
-            'db_type': 'MySQL',
-            'status': 'running',
-            'cpu_usage': 45,
-            'memory_usage': 68,
-            'storage': '120GB / 500GB'
-        }
-        ok, msg = db_validator.validate_connection(
-            db_type=seed['db_type'],
-            host=seed['host'],
-            port=seed['port'],
-            username=seed['username'],
-            password=seed['password']
-        )
-        if ok:
-            inst = Instance(**seed)
-            db.session.add(inst)
-            db.session.commit()
-        else:
-            # 探活失败则不插入种子数据
-            pass
-
 
 @instances_bp.get('/instances/<int:instance_id>/databases/<string:database>/tables')
 def list_tables(instance_id, database):
