@@ -7,7 +7,7 @@ try:
 except ImportError:
     pymysql = None
 
-from .prometheus_service import prometheus_service  # noqa: F401  # 可能未来扩展用到
+
 from ..models import Instance
 
 logger = logging.getLogger(__name__)

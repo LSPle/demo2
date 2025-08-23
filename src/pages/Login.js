@@ -32,7 +32,6 @@ const Login = () => {
   };
 
   const handleLoginFailed = (errorInfo) => {
-    console.log('登录失败:', errorInfo);
     message.error('请检查输入信息');
   };
 

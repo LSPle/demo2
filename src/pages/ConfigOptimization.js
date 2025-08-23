@@ -230,10 +230,10 @@ const ConfigOptimization = () => {
 
       // 可选：监听打开与错误事件
       es.addEventListener('open', () => {
-        // console.debug('SSE opened');
+        // SSE连接已打开
       });
       es.addEventListener('error', () => {
-        // console.warn('SSE error');
+        // SSE连接出错
       });
     } catch (err) {
       // 在不支持 SSE 的环境中静默失败

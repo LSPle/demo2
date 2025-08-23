@@ -266,7 +266,6 @@ const InstanceManagement = () => {
             <Search
               placeholder="搜索实例..."
               style={{ width: 200 }}
-              onSearch={(value) => console.log('搜索:', value)}
             />
             <Button icon={<FilterOutlined />}>筛选</Button>
           </Space>

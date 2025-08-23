@@ -35,10 +35,10 @@ const Header = () => {
         window.location.href = '/login';
         break;
       case 'profile':
-        console.log('个人资料');
+        // TODO: 实现个人资料功能
         break;
       case 'settings':
-        console.log('系统设置');
+        // TODO: 实现系统设置功能
         break;
       default:
         break;
