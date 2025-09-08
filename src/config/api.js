@@ -14,6 +14,8 @@ export const API_ENDPOINTS = {
   // 新增：架构分析接口（POST）
   ARCH_ANALYZE: (id) => `/api/instances/${id}/arch/analyze`,
   SLOWLOG_ANALYZE: (id) => `/api/instances/${id}/slowlog/analyze`,
+  // 新增：慢日志列表（GET）
+  SLOWLOG_LIST: (id) => `/api/instances/${id}/slowlog`,
   METRICS: `/api/metrics`,
 };
 

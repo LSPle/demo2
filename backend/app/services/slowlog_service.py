@@ -32,8 +32,8 @@ class SlowLogService:
             write_timeout=self.timeout
         )
 
-    def analyze(self, inst: Instance, top: int = 20, min_avg_ms: int = 100, tail_kb: int = 256) -> Tuple[bool, Dict[str, Any], str]:
-        """综合使用 performance_schema 与 慢日志文件 抽样。
+    def analyze(self, inst: Instance, top: int = 20, min_avg_ms: int = 10, tail_kb: int = 256) -> Tuple[bool, Dict[str, Any], str]:
+        """综合使用 performance_schema 与 慢日志表 抽样（不再使用 LOAD_FILE）。
         返回 (ok, data, msg)
         """
         if not inst:
@@ -70,7 +70,7 @@ class SlowLogService:
                     log_output_raw = str(vars_map.get('log_output') or '')
                     log_output_norm = log_output_raw.strip().upper()
                     # 支持 FILE, TABLE 或组合 'FILE,TABLE'
-                    has_file_output = any(p.strip() == 'FILE' for p in log_output_norm.split(',') if p.strip())
+                    has_table_output = any(p.strip() == 'TABLE' for p in log_output_norm.split(',') if p.strip())
 
                     slow_file = str(vars_map.get('slow_query_log_file') or '').strip()
 
@@ -88,17 +88,54 @@ class SlowLogService:
                     else:
                         warnings.append('performance_schema 未开启，无法生成 Top SQL 指纹统计')
 
-                    # 2) FILE 抽样（可选）
-                    if slow_query_log and has_file_output and slow_file:
-                        ok, samples, warn = self._sample_slowlog_file(cur, slow_file, tail_kb)
-                        if ok:
-                            file_samples = samples
-                        if warn:
-                            warnings.append(warn)
-                    elif slow_query_log and not has_file_output:
-                        warnings.append('慢日志未以 FILE 输出（当前 log_output=%s），跳过文件抽样' % log_output_raw)
-                    elif slow_query_log and has_file_output and not slow_file:
-                        warnings.append('slow_query_log_file 未配置或不可见，无法进行文件抽样（当前 log_output=%s）' % log_output_raw)
+                    # 2) TABLE 抽样（来自 mysql.slow_log，可选；不再使用 LOAD_FILE）
+                    if slow_query_log and has_table_output:
+                        try:
+                            cur.execute(
+                                "SELECT start_time, db, query_time, lock_time, rows_sent, rows_examined, sql_text "
+                                "FROM mysql.slow_log ORDER BY start_time DESC LIMIT %s",
+                                (10,)  # 抽样最近 10 条
+                            )
+                            trows = cur.fetchall() or []
+
+                            def _sec(val):
+                                try:
+                                    return float(val.total_seconds()) if hasattr(val, 'total_seconds') else float(val or 0)
+                                except Exception:
+                                    return 0.0
+
+                            def _s(val):
+                                if val is None:
+                                    return ''
+                                try:
+                                    import datetime as _dt
+                                    if isinstance(val, (_dt.datetime,)):
+                                        return val.strftime('%Y-%m-%d %H:%M:%S')
+                                except Exception:
+                                    pass
+                                if isinstance(val, (bytes, bytearray)):
+                                    try:
+                                        return val.decode('utf-8', errors='ignore')
+                                    except Exception:
+                                        return ''
+                                return str(val)
+
+                            file_samples = []
+                            for r in trows:
+                                file_samples.append({
+                                    'time': _s(r.get('start_time')),
+                                    'db': _s(r.get('db')),
+                                    'query_time_ms': round(_sec(r.get('query_time')) * 1000, 2),
+                                    'lock_time_ms': round(_sec(r.get('lock_time')) * 1000, 2),
+                                    'rows_sent': int(r.get('rows_sent') or 0),
+                                    'rows_examined': int(r.get('rows_examined') or 0),
+                                    'sql': _s(r.get('sql_text'))
+                                })
+                        except Exception as e:
+                            logger.info(f"读取慢日志表抽样失败: {e}")
+                            warnings.append('无法从 mysql.slow_log 抽样（可能权限不足或该表不可用）')
+                    elif slow_query_log and not has_table_output:
+                        warnings.append('慢日志未以 TABLE 输出（当前 log_output=%s），跳过表抽样' % log_output_raw)
 
                 data = {
                     'overview': overview,
@@ -114,16 +151,17 @@ class SlowLogService:
             return False, {}, f"连接或查询失败: {e}"
 
     def _collect_ps_top(self, cur, top: int, min_avg_ms: int) -> List[Dict[str, Any]]:
-        # 为兼容性，尽量只取通用字段
+        # 为兼容性，尽量只取通用字段；在SQL侧按“平均耗时”降序排序，并用阈值过滤，避免先按总耗时LIMIT导致全部被后置过滤清空
         sql = (
             "SELECT schema_name, digest, digest_text, count_star, "
             "       sum_timer_wait, sum_rows_examined, sum_rows_sent "
             "  FROM performance_schema.events_statements_summary_by_digest "
-            " WHERE schema_name IS NOT NULL AND schema_name NOT IN ('mysql','sys','performance_schema','information_schema') "
-            " ORDER BY sum_timer_wait DESC LIMIT %s"
+            " WHERE (schema_name IS NULL OR schema_name NOT IN ('mysql','sys','performance_schema','information_schema')) "
+            "   AND sum_timer_wait >= (%s * 1000000000) * GREATEST(count_star, 1) "
+            " ORDER BY (sum_timer_wait / GREATEST(count_star, 1)) DESC LIMIT %s"
         )
         try:
-            cur.execute(sql, (int(top),))
+            cur.execute(sql, (int(min_avg_ms), int(top)))
             rows = cur.fetchall() or []
         except Exception:
             # 某些版本字段名不同或表不可用
@@ -142,6 +180,7 @@ class SlowLogService:
         for r in rows:
             cnt = int(r.get('count_star') or 0)
             avg_ms, total_ms = _ps_to_ms(r.get('sum_timer_wait'), cnt)
+            # 保险起见再做一次阈值校验（SQL已过滤）
             if avg_ms < float(min_avg_ms):
                 continue
             rows_examined = int(r.get('sum_rows_examined') or 0)
@@ -160,100 +199,147 @@ class SlowLogService:
             })
         return top_list
 
-    def _sample_slowlog_file(self, cur, slow_file: str, tail_kb: int) -> Tuple[bool, List[Dict[str, Any]], Optional[str]]:
-        # 使用 LOAD_FILE 读取文件尾部，依赖 FILE 权限与 secure_file_priv 设置
+
+    # 新增：从 mysql.slow_log 按条件分页查询
+    def list_from_table(
+        self,
+        inst: Instance,
+        page: int = 1,
+        page_size: int = 10,
+        filters: Optional[Dict[str, Any]] = None
+    ) -> Tuple[bool, Dict[str, Any], str]:
+        if not inst:
+            return False, {}, "实例不存在"
+        if (inst.db_type or '').strip() != 'MySQL':
+            return False, {}, "仅支持MySQL实例"
         try:
-            cur.execute("SELECT LOAD_FILE(%s) AS content", (slow_file,))
-            row = cur.fetchone()
-            blob = row and row.get('content')
-            if not blob:
-                return False, [], 'LOAD_FILE 未返回内容，可能权限不足或 secure_file_priv 限制'
-            if isinstance(blob, memoryview):
-                blob = bytes(blob)
+            conn = self._connect(inst)
             try:
-                data = blob[-tail_kb*1024:] if tail_kb > 0 else blob
-            except Exception:
-                data = blob
-            try:
-                text = data.decode('utf-8', errors='ignore')
-            except Exception:
-                text = str(data)
-            samples = self._parse_slowlog_tail(text)
-            return True, samples, None
-        except Exception as e:
-            logger.info(f"读取慢日志文件失败: {e}")
-            return False, [], '无法通过 LOAD_FILE 读取慢日志文件（需要 FILE 权限，且受 secure_file_priv 影响）'
+                with conn.cursor() as cur:
+                    # 读取变量，判定 log_output 是否包含 TABLE
+                    cur.execute(
+                        """
+                        SHOW GLOBAL VARIABLES WHERE Variable_name IN ('slow_query_log','log_output')
+                        """
+                    )
+                    vr = cur.fetchall() or []
+                    vmap = {r['Variable_name']: r['Value'] for r in vr}
+                    log_output = str(vmap.get('log_output') or '').strip().upper()
+                    has_table = any(p.strip() == 'TABLE' for p in log_output.split(',') if p.strip())
+                    overview = {
+                        'slow_query_log': str(vmap.get('slow_query_log') or ''),
+                        'log_output': str(vmap.get('log_output') or ''),
+                    }
+                    if not has_table:
+                        return False, {'overview': overview}, "仅支持 log_output 包含 TABLE 的数据库"
 
-    def _parse_slowlog_tail(self, tail_text: str) -> List[Dict[str, Any]]:
-        # 解析 MySQL 慢日志标准格式的若干条记录（从尾部截取，可能为半条，尽力而为）
-        lines = tail_text.splitlines()
-        entries: List[Dict[str, Any]] = []
-        cur_entry: Dict[str, Any] = {}
-        sql_buf: List[str] = []
+                    # 动态构造查询
+                    filters = filters or {}
+                    where_clauses: List[str] = []
+                    params: List[Any] = []
 
-        # 正则（允许行首与关键字周围存在空白字符，并兼容反引号数据库名）
-        re_time = re.compile(r"^\s*#\s*Time:\s*(.+)")
-        re_user = re.compile(r"^\s*#\s*User@Host:\s*(.+)")
-        re_q = re.compile(r"^\s*#\s*Query_time:\s*([0-9.]+)\s+Lock_time:\s*([0-9.]+)\s+Rows_sent:\s*(\d+)\s+Rows_examined:\s*(\d+)")
-        re_db = re.compile(r"^\s*use\s+`?([^`;]+)`?\s*;")
-        re_setts = re.compile(r"^\s*SET\s+timestamp\s*=\s*\d+\s*;")
+                    keyword = (filters.get('keyword') or '').strip()
+                    if keyword:
+                        where_clauses.append("sql_text LIKE %s")
+                        params.append(f"%{keyword}%")
 
-        def _flush_current():
-            nonlocal cur_entry, sql_buf
-            if cur_entry:
-                sql = '\n'.join(sql_buf).strip()
-                has_meaning = any([
-                    bool(cur_entry.get('time')),
-                    bool(cur_entry.get('user_host')),
-                    cur_entry.get('query_time_ms') is not None,
-                    bool(cur_entry.get('db')),
-                ])
-                if sql:
-                    cur_entry['sql'] = sql[:2000]
-                if sql or has_meaning:
-                    entries.append(cur_entry)
-            cur_entry = {}
-            sql_buf = []
+                    user_host = (filters.get('user_host') or '').strip()
+                    if user_host:
+                        where_clauses.append("user_host LIKE %s")
+                        params.append(f"%{user_host}%")
 
-        for ln in lines:
-            s = ln.lstrip()
-            if s.startswith('# Time:') or s.startswith('#\tTime:'):
-                _flush_current()
-                m = re_time.match(s)
-                cur_entry = {'time': m.group(1) if m else ''}
-            elif s.startswith('# User@Host:') or s.startswith('#\tUser@Host:'):
-                m = re_user.match(s)
-                if m:
-                    cur_entry['user_host'] = m.group(1)
-            elif s.startswith('# Query_time:') or s.startswith('#\tQuery_time:'):
-                m = re_q.match(s)
-                if m:
+                    dbname = (filters.get('db') or '').strip()
+                    if dbname:
+                        where_clauses.append("db = %s")
+                        params.append(dbname)
+
+                    start_time = (filters.get('start_time') or '').strip()
+                    if start_time:
+                        where_clauses.append("start_time >= %s")
+                        params.append(start_time)
+
+                    end_time = (filters.get('end_time') or '').strip()
+                    if end_time:
+                        where_clauses.append("start_time <= %s")
+                        params.append(end_time)
+
+                    where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+                    # 统计总数
+                    count_sql = f"SELECT COUNT(*) AS cnt FROM mysql.slow_log{where_sql}"
+                    cur.execute(count_sql, params)
+                    count_row = cur.fetchone() or {}
+                    total = int(count_row.get('cnt') or 0)
+
+                    # 分页数据
                     try:
-                        cur_entry['query_time_ms'] = round(float(m.group(1)) * 1000, 2)
-                        cur_entry['lock_time_ms'] = round(float(m.group(2)) * 1000, 2)
-                        cur_entry['rows_sent'] = int(m.group(3))
-                        cur_entry['rows_examined'] = int(m.group(4))
+                        page = max(1, int(page))
                     except Exception:
-                        pass
-            elif re_db.match(s):
-                cur_entry['db'] = re_db.match(s).group(1)
-            elif re_setts.match(s):
-                # ignore
-                continue
-            elif s.startswith('#'):
-                # 其它注释行忽略
-                continue
-            else:
-                # SQL 内容（保留原始行，避免丢失缩进和格式）
-                if s.strip():
-                    sql_buf.append(ln)
+                        page = 1
+                    try:
+                        page_size = max(1, min(100, int(page_size)))
+                    except Exception:
+                        page_size = 10
+                    offset = (page - 1) * page_size
 
-        _flush_current()
+                    data_sql = (
+                        "SELECT start_time, user_host, db, query_time, lock_time, rows_sent, rows_examined, sql_text "
+                        "FROM mysql.slow_log"
+                        f"{where_sql} "
+                        "ORDER BY start_time DESC LIMIT %s OFFSET %s"
+                    )
+                    cur.execute(data_sql, params + [page_size, offset])
+                    rows = cur.fetchall() or []
 
-        # 只返回最后若干条
-        if len(entries) > 10:
-            entries = entries[-10:]
-        return entries
+                    # 安全转换时间为秒（兼容 datetime.timedelta/TIME 类型）
+                    def _sec(val):
+                        try:
+                            return float(val.total_seconds()) if hasattr(val, 'total_seconds') else float(val or 0)
+                        except Exception:
+                            return 0.0
+
+                    # 统一将文本/时间字段转为可 JSON 序列化的字符串
+                    def _s(val):
+                        if val is None:
+                            return ''
+                        try:
+                            import datetime as _dt
+                            if isinstance(val, (_dt.datetime,)):
+                                return val.strftime('%Y-%m-%d %H:%M:%S')
+                        except Exception:
+                            pass
+                        if isinstance(val, (bytes, bytearray)):
+                            try:
+                                return val.decode('utf-8', errors='ignore')
+                            except Exception:
+                                return ''
+                        return str(val)
+
+                    items: List[Dict[str, Any]] = []
+                    for r in rows:
+                        items.append({
+                            'start_time': _s(r.get('start_time')),
+                            'user_host': _s(r.get('user_host')),
+                            'db': _s(r.get('db')),
+                            'query_time': _sec(r.get('query_time')),
+                            'lock_time': _sec(r.get('lock_time')),
+                            'rows_sent': int(r.get('rows_sent') or 0),
+                            'rows_examined': int(r.get('rows_examined') or 0),
+                            'sql_text': _s(r.get('sql_text'))
+                        })
+                    data = {
+                        'overview': overview,
+                        'items': items,
+                        'total': total,
+                        'page': page,
+                        'page_size': page_size,
+                    }
+                    return True, data, 'OK'
+            finally:
+                conn.close()
+        except Exception as e:
+            logger.error(f"查询慢日志表失败(实例ID={getattr(inst, 'id', None)}): {e}")
+            return False, {}, f"连接或查询失败: {e}"
 
 
 slowlog_service = SlowLogService()

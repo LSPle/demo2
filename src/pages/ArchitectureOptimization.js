@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Select, Button, Space, Descriptions, Tag, Table, message, Divider, Tooltip, Alert } from 'antd';
-// 移除图标模块（根据用户需求删除图中的模块）
 import { DatabaseOutlined } from '@ant-design/icons';
 import API_BASE_URL, { API_ENDPOINTS } from '../config/api';
 
@@ -149,7 +148,7 @@ const ArchitectureOptimization = () => {
         const sresp = await fetch(API_ENDPOINTS.SLOWLOG_ANALYZE(selectedInstance), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ top: 15, min_avg_ms: 100, tail_kb: 256 })
+          body: JSON.stringify({ top: 15, min_avg_ms: 10, tail_kb: 256 })
         });
         if (sresp.ok) {
           const sdata = await sresp.json();
@@ -314,7 +313,7 @@ const ArchitectureOptimization = () => {
             </div>
 
             <div>
-              <h3 style={{ marginBottom: 8 }}>文件抽样（尾部解析）</h3>
+              <h3 style={{ marginBottom: 8 }}>慢日志表抽样（最近记录）</h3>
               <Table
                 size="small"
                 rowKey={(r, idx) => String(idx)}

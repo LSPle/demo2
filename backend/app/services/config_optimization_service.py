@@ -269,13 +269,21 @@ class DeepSeekConfigAdvisor:
     def advise(self, collected: Dict[str, Any]) -> Dict[str, Any]:
         raw = collected.get('raw', {})
         prompt = (
-            "你是资深MySQL DBA。根据以下实例配置信息与运行状态，给出配置优化建议列表。"\
+            "你是资深MySQL DBA。根据以下实例配置信息与运行状态，给出配置优化建议列表."\
             "必须严格输出JSON，格式：{"\
             "\"configItems\":[{"\
             "\"parameter\":string,\"category\":string,\"currentValue\":string,\"recommendedValue\":string,\"status\":\"success|warning|error\",\"impact\":\"高|中等|低|无\",\"description\":string,\"reason\":string}]}。"\
             "仅返回JSON，不要任何解释。\n\n"
             f"【实例数据】:\n{json.dumps(raw, ensure_ascii=False)}\n"
         )
+        # 新增：融合慢日志摘要（若可用）
+        slowlog_summary = collected.get('slowlogSummary')
+        if slowlog_summary:
+            try:
+                import json as _json
+                prompt = prompt + f"\n【慢日志摘要】:\n{_json.dumps(slowlog_summary, ensure_ascii=False)}\n"
+            except Exception:
+                pass
         payload = {
             "model": self.model,
             "messages": [

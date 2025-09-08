@@ -51,12 +51,12 @@ const Header = () => {
       style={{
         background: 'rgba(255, 255, 255, 0.95)',
         backdropFilter: 'blur(10px)',
-        padding: '0 28px',
+        padding: '0 var(--space-xl)',
         borderBottom: '1px solid rgba(240, 240, 240, 0.5)',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        boxShadow: '0 4px 20px rgba(0,21,41,0.08)',
+        boxShadow: 'var(--shadow-md)',
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         borderRadius: '0'
       }}
@@ -70,20 +70,20 @@ const Header = () => {
             className="pulse"
             style={{
               fontSize: 18,
-              color: '#595959',
+              color: 'var(--color-text-secondary)',
               cursor: 'pointer',
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              padding: '8px',
+              padding: 'var(--space-xs)',
               borderRadius: '50%',
               background: 'rgba(255, 255, 255, 0.8)'
             }}
             onMouseEnter={(e) => {
               e.target.style.transform = 'scale(1.2)';
-              e.target.style.color = '#1890ff';
+              e.target.style.color = 'var(--color-primary)';
             }}
             onMouseLeave={(e) => {
               e.target.style.transform = 'scale(1)';
-              e.target.style.color = '#595959';
+              e.target.style.color = 'var(--color-text-secondary)';
             }}
           />
         </Badge>
@@ -101,7 +101,7 @@ const Header = () => {
             style={{ 
               cursor: 'pointer',
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              padding: '8px 16px',
+              padding: 'var(--space-xs) var(--space-md)',
               borderRadius: '20px',
               background: 'rgba(255, 255, 255, 0.8)',
               backdropFilter: 'blur(10px)'
@@ -118,7 +118,7 @@ const Header = () => {
             <Avatar
               size={36}
               style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-2) 100%)',
                 fontSize: 14,
                 transition: 'all 0.3s ease'
               }}
@@ -127,10 +127,10 @@ const Header = () => {
             </Avatar>
             <span
               style={{
-                color: '#262626',
-                fontSize: 14,
+                color: 'var(--color-text)',
+                fontSize: 'var(--font-md)',
                 fontWeight: 500,
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-2) 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text'

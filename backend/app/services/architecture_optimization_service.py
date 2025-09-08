@@ -264,7 +264,7 @@ class ArchAdvisor:
 
 
 # 新增：基于 DeepSeek 的架构建议
-def llm_advise_architecture(overview: Dict[str, Any], replication: Dict[str, Any], risks: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def llm_advise_architecture(overview: Dict[str, Any], replication: Dict[str, Any], risks: List[Dict[str, Any]], slowlog_summary: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """调用 DeepSeek 生成更智能的架构建议。返回结构化JSON，失败返回 None。"""
     cfg = current_app.config
     api_key = cfg.get('DEEPSEEK_API_KEY')
@@ -288,6 +288,10 @@ def llm_advise_architecture(overview: Dict[str, Any], replication: Dict[str, Any
         f"【replication】\n{replication}\n\n"
         f"【rule_based_risks】\n{risks}\n"
     )
+    
+    # 如果提供了慢日志摘要，将其附加到提示中，便于关联复制延迟与慢SQL热点
+    if slowlog_summary:
+        user_prompt += f"\n【slowlog_summary】\n{slowlog_summary}\n"
 
     url = f"{base_url}/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}

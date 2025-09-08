@@ -10,7 +10,8 @@ import {
   ControlOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  BarChartOutlined
+  BarChartOutlined,
+  ClockCircleOutlined
 } from '@ant-design/icons';
 
 const { Sider } = Layout;
@@ -50,139 +51,87 @@ const Sidebar = () => {
       key: '/architecture',
       icon: <DatabaseOutlined />,
       label: '架构优化'
+    },
+    // 新增：慢查询日志
+    {
+      key: '/slowlog',
+      icon: <ClockCircleOutlined />,
+      label: '慢查询日志'
     }
   ];
 
-  const handleMenuClick = ({ key }) => {
+  const onClick = ({ key }) => {
     navigate(key);
   };
 
-  const getSelectedKey = () => {
-    const path = location.pathname;
-    return path === '/' ? '/overview' : path;
-  };
+  const selectedKeys = [menuItems.find(m => location.pathname.startsWith(m.key))?.key || '/overview'];
 
   return (
-    <Sider
-      collapsible
-      collapsed={collapsed}
-      onCollapse={setCollapsed}
+    <Sider 
+      collapsible 
+      collapsed={collapsed} 
+      onCollapse={setCollapsed} 
+      width={220} 
       theme="light"
-      width={240}
       style={{
-        boxShadow: '2px 0 20px rgba(0,21,41,0.15)',
-        zIndex: 100,
-        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        background: 'rgba(255, 255, 255, 0.95)',
-        backdropFilter: 'blur(10px)'
+        background: 'var(--color-bg)',
+        borderRight: '1px solid var(--color-border)'
       }}
     >
-      <div
-        className="fade-in-up"
-        style={{
-          height: 64,
+      {/* 标题区域 */}
+      <div style={{ 
+        height: 64, 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        padding: '0 var(--space-md)',
+        borderBottom: '1px solid var(--color-border)',
+        background: 'var(--color-bg-panel)'
+      }}>
+        <div style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: collapsed ? 'center' : 'flex-start',
-          padding: collapsed ? 0 : '0 24px',
-          borderBottom: '1px solid rgba(102, 126, 234, 0.2)',
-          background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%)',
-          backdropFilter: 'blur(5px)',
-          margin: '8px 0',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          boxShadow: '0 2px 8px rgba(102, 126, 234, 0.1)'
-        }}
-      >
-        <div
-          style={{
+          gap: 'var(--space-xs)'
+        }}>
+          <div style={{
             width: 32,
             height: 32,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: 'linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-2) 100%)',
+            borderRadius: 'var(--radius-sm)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            marginRight: collapsed ? 0 : 12,
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            transform: collapsed ? 'scale(1.1)' : 'scale(1)',
-            boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
-          }}
-        >
-          <DatabaseOutlined
-            className={collapsed ? 'pulse' : ''}
-            style={{
-              fontSize: 18,
-              color: '#ffffff',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-            }}
-          />
-        </div>
-        {!collapsed && (
-          <span
-            className="fade-in-right"
-            style={{
-              fontSize: 16,
+            color: '#fff',
+            fontSize: 'var(--font-lg)',
+            fontWeight: 'bold'
+          }}>
+            目
+          </div>
+          {!collapsed && (
+            <span style={{
+              fontSize: 'var(--font-lg)',
               fontWeight: 600,
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-              letterSpacing: '0.5px'
-            }}
-          >
-            数据库优化平台
-          </span>
-        )}
+              color: 'var(--color-text)'
+            }}>
+              数据库优化平台
+            </span>
+          )}
+        </div>
       </div>
-
+      
+      {/* 菜单区域 */}
       <Menu
         mode="inline"
-        selectedKeys={[getSelectedKey()]}
-        onClick={handleMenuClick}
-        className="fade-in-up"
+        selectedKeys={selectedKeys}
+        items={menuItems}
+        onClick={onClick}
         style={{
-          borderRight: 0,
           background: 'transparent',
-          height: 'calc(100vh - 64px - 60px)',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          border: 'none',
+          padding: 'var(--space-xs) 0'
         }}
-        items={menuItems.map((item, index) => ({
-          ...item,
-          style: {
-            margin: '4px 8px',
-            borderRadius: '12px',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            animationDelay: `${index * 0.1}s`
-          }
-        }))}
+        theme="light"
       />
-
-      {/* 系统状态 */}
-      <div
-        className="fade-in-up"
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 60,
-          borderTop: '1px solid rgba(240, 240, 240, 0.5)',
-          background: 'rgba(255, 255, 255, 0.8)',
-          backdropFilter: 'blur(10px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: collapsed ? 'center' : 'flex-start',
-          padding: collapsed ? 0 : '0 24px',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          borderRadius: '0 0 20px 0'
-        }}
-      >
-        <Badge status="success" />
-        {!collapsed && (
-          <span style={{ marginLeft: 8, fontSize: 12, color: '#8c8c8c' }}>
-            服务正常
-          </span>
-        )}
-      </div>
     </Sider>
   );
 };

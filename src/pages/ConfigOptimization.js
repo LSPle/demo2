@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Select, Table, Button, Space, Tag, Progress, Alert, Descriptions, message } from 'antd';
 import {
-  DatabaseOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   CloseCircleOutlined,
   SyncOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  DatabaseOutlined
 } from '@ant-design/icons';
 import API_BASE_URL, { API_ENDPOINTS } from '../config/api';
 
@@ -16,11 +16,8 @@ const ConfigOptimization = () => {
   const [selectedInstance, setSelectedInstance] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [configData, setConfigData] = useState(null);
-  // 新增：慢日志分析状态与数据，避免引用未定义
   const [slowData, setSlowData] = useState(null);
   const [isSlowAnalyzing, setIsSlowAnalyzing] = useState(false);
-
-  // 数据库实例选项（从后端加载，仅展示非异常实例）
   const [instanceOptions, setInstanceOptions] = useState([]);
 
   useEffect(() => {
@@ -111,7 +108,7 @@ const ConfigOptimization = () => {
         const sresp = await fetch(API_ENDPOINTS.SLOWLOG_ANALYZE(selectedInstance), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ top: 15, min_avg_ms: 100, tail_kb: 256 })
+          body: JSON.stringify({ top: 15, min_avg_ms: 10, tail_kb: 256 })
         });
         if (sresp.ok) {
           const sdata = await sresp.json();
@@ -132,23 +129,10 @@ const ConfigOptimization = () => {
     }
   };
 
-  const handleEditConfig = (record) => {
-    setEditingConfig({
-      ...editingConfig,
-      [record.parameter]: record.recommendedValue
-    });
-  };
-
-  const handleSaveConfig = (record) => {
-    message.success(`参数 ${record.parameter} 已更新`);
-    const next = { ...editingConfig };
-    delete next[record.parameter];
-    setEditingConfig(next);
-  };
-
-  const handleApplyAllOptimizations = () => {
-    message.success('所有优化建议已应用');
-  };
+  // 删除未使用的配置编辑功能
+  // const handleEditConfig = (record) => { ... };
+  // const handleSaveConfig = (record) => { ... };
+  // const handleApplyAllOptimizations = () => { ... };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -180,62 +164,111 @@ const ConfigOptimization = () => {
     return v === 'on' || v === '1' || v === 'true' || v === 'yes';
   };
 
-  // 指标实时刷新（SSE）
+  // 指标实时刷新（SSE）- 仅在配置优化页面启用
   useEffect(() => {
     // 仅在已选择实例且已有分析结果时启动实时指标刷新
     if (!selectedInstance || !configData) return;
 
-    const service = 'mysqld'; // 目前后端默认以服务名过滤，可按需从实例映射
-    const url = `${API_BASE_URL}/api/metrics/stream?service=${encodeURIComponent(service)}&interval=5`;
-    let es;
-
-    try {
-      es = new EventSource(url);
-
-      const applyMetrics = (metrics) => {
-        setConfigData((prev) => {
-          if (!prev) return prev;
-          const memStr = typeof metrics?.memory_usage === 'number' ? `${metrics.memory_usage}%` : prev.basicInfo.memoryUsage;
-          let diskStr = prev.basicInfo.diskUsage;
-          if (metrics?.disk_usage && typeof metrics.disk_usage.usage_percent === 'number') {
-            const p = metrics.disk_usage.usage_percent;
-            const display = metrics.disk_usage.storage_display;
-            diskStr = display ? `${p}% (${display})` : `${p}%`;
-          }
-          return {
-            ...prev,
-            basicInfo: {
-              ...prev.basicInfo,
-              memoryUsage: memStr,
-              diskUsage: diskStr,
-            }
-          };
-        });
-      };
-
-      es.addEventListener('metrics', (e) => {
-        try {
-          const data = JSON.parse(e.data);
-          applyMetrics(data);
-        } catch (_) {
-          // ignore parse errors
-        }
-      });
-
-      // 可选：监听打开与错误事件
-      es.addEventListener('open', () => {
-        // SSE连接已打开
-      });
-      es.addEventListener('error', () => {
-        // SSE连接出错
-      });
-    } catch (err) {
-      // 在不支持 SSE 的环境中静默失败
-      console.warn('SSE 初始化失败', err);
+    // 检查是否支持SSE和是否在正确的页面
+    if (typeof EventSource === 'undefined') {
+      console.warn('浏览器不支持Server-Sent Events');
+      return;
     }
 
+    const service = 'mysqld';
+    const url = `${API_BASE_URL}/api/metrics/stream?service=${encodeURIComponent(service)}&interval=5`;
+    let es;
+    let reconnectTimer;
+    let reconnectAttempts = 0;
+    let isComponentMounted = true;
+    const maxReconnectAttempts = 3; // 减少重连次数
+    const reconnectDelay = 5000; // 增加重连间隔到5秒
+
+    const applyMetrics = (metrics) => {
+      if (!isComponentMounted) return;
+      setConfigData((prev) => {
+        if (!prev) return prev;
+        const memStr = typeof metrics?.memory_usage === 'number' ? `${metrics.memory_usage}%` : prev.basicInfo.memoryUsage;
+        let diskStr = prev.basicInfo.diskUsage;
+        if (metrics?.disk_usage && typeof metrics.disk_usage.usage_percent === 'number') {
+          const p = metrics.disk_usage.usage_percent;
+          const display = metrics.disk_usage.storage_display;
+          diskStr = display ? `${p}% (${display})` : `${p}%`;
+        }
+        return {
+          ...prev,
+          basicInfo: {
+            ...prev.basicInfo,
+            memoryUsage: memStr,
+            diskUsage: diskStr,
+          }
+        };
+      });
+    };
+
+    const connectSSE = () => {
+      if (!isComponentMounted) return;
+      
+      try {
+        if (es) {
+          es.close();
+        }
+        
+        es = new EventSource(url);
+
+        es.addEventListener('open', () => {
+          if (isComponentMounted) {
+            reconnectAttempts = 0;
+          }
+        });
+
+        es.addEventListener('metrics', (e) => {
+          if (!isComponentMounted) return;
+          try {
+            const data = JSON.parse(e.data);
+            applyMetrics(data);
+          } catch (err) {
+            // 静默处理解析错误
+          }
+        });
+
+        es.addEventListener('error', (e) => {
+          if (!isComponentMounted) return;
+          
+          // 只在连接完全失败且重连次数未达上限时重连
+          if (es.readyState === EventSource.CLOSED && reconnectAttempts < maxReconnectAttempts) {
+            reconnectAttempts++;
+            reconnectTimer = setTimeout(() => {
+              if (isComponentMounted) {
+                connectSSE();
+              }
+            }, reconnectDelay);
+          }
+        });
+
+      } catch (err) {
+        // 静默处理初始化错误
+      }
+    };
+
+    // 延迟启动SSE连接，避免页面加载时的竞争条件
+    const initTimer = setTimeout(() => {
+      if (isComponentMounted) {
+        connectSSE();
+      }
+    }, 1000);
+
     return () => {
-      if (es) es.close();
+      isComponentMounted = false;
+      if (initTimer) {
+        clearTimeout(initTimer);
+      }
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+      }
+      if (es) {
+        es.close();
+      }
     };
   }, [selectedInstance, configData]);
 
@@ -478,7 +511,7 @@ const ConfigOptimization = () => {
                 </div>
 
                 <div>
-                  <h3 style={{ marginBottom: 8 }}>文件抽样（尾部解析）</h3>
+                  <h3 style={{ marginBottom: 8 }}>慢日志表抽样（最近记录）</h3>
                   <Table
                     size="small"
                     rowKey={(r, idx) => String(idx)}
