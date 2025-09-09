@@ -113,7 +113,7 @@ const Sidebar = () => {
               fontWeight: 600,
               color: 'var(--color-text)'
             }}>
-              数据库优化平台
+              数据库性能优化平台
             </span>
           )}
         </div>

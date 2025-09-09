@@ -96,6 +96,12 @@ const App = () => {
     })
     .filter(Boolean);
 
+  // 如果当前是登录页面，直接渲染登录组件，不使用AppLayout
+  if (activeBasePath === '/login') {
+    return keepAliveViews;
+  }
+
+  // 其他页面使用AppLayout包装
   return (
     <AppLayout>
       {keepAliveViews}
