@@ -2,11 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Card, Select, Table, Form, Input, DatePicker, Space, Button, Tag, message, Tooltip, Modal } from 'antd';
 import API_BASE_URL, { API_ENDPOINTS } from '../config/api';
 import dayjs from 'dayjs';
+import { useInstances } from '../hooks/useInstances';
 
 const { RangePicker } = DatePicker;
 
 const SlowQueryLogs = () => {
-  const [instances, setInstances] = useState([]);
   const [instanceId, setInstanceId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState({ items: [], total: 0, overview: {} });
@@ -14,17 +14,11 @@ const SlowQueryLogs = () => {
   const [pageSize, setPageSize] = useState(10);
   const [filters, setFilters] = useState({ keyword: '', db: '', user_host: '', range: [] });
   const [sqlPreview, setSqlPreview] = useState({ open: false, sql: '' });
+  
+  // 使用实例管理Hook
+  const { instances, loading: loadingInstances } = useInstances();
 
-  // 加载实例列表
-  useEffect(() => {
-    fetch(`${API_BASE_URL}${API_ENDPOINTS.INSTANCES}`)
-      .then(res => res.json())
-      .then(json => {
-        const list = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
-        setInstances(list);
-      })
-      .catch(() => {});
-  }, []);
+  // 实例列表已通过useInstances Hook自动管理，无需手动获取
 
   const fetchSlowLogs = async (id, p = page, ps = pageSize, f = filters) => {
     if (!id) return;

@@ -6,6 +6,7 @@ import {
   BulbOutlined
 } from '@ant-design/icons';
 import { API_ENDPOINTS } from '../config/api';
+import { useInstances } from '../hooks/useInstances';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -72,34 +73,13 @@ const SQLOptimization = () => {
   const [optimizationResults, setOptimizationResults] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // 数据库实例选项
-  const [instanceOptions, setInstanceOptions] = useState([]);
+  // 使用实例管理Hook
+  const { instanceOptions, loading: loadingInstances } = useInstances();
   // 数据库选项
   const [databaseOptions, setDatabaseOptions] = useState([]);
   const [loadingDatabases, setLoadingDatabases] = useState(false);
 
-  useEffect(() => {
-    const fetchInstances = async () => {
-      try {
-        const response = await fetch(API_ENDPOINTS.INSTANCES);
-        if (!response.ok) throw new Error('API响应失败');
-        const data = await response.json();
-        const options = (Array.isArray(data) ? data : [])
-          // 仅展示非异常实例，视为"已连接"
-          .filter(inst => inst.status !== 'error')
-          .map(inst => ({
-            value: String(inst.id),
-            label: `${inst.instanceName} (${inst.dbType}) ${inst.host}:${inst.port}`
-          }));
-        setInstanceOptions(options);
-      } catch (err) {
-        console.error('获取实例列表失败:', err);
-        message.error('获取数据库实例列表失败，请检查后端服务');
-        setInstanceOptions([]);
-      }
-    };
-    fetchInstances();
-  }, []);
+  // 实例选项已通过useInstances Hook自动管理，无需手动获取
 
   // 当选择实例时，获取该实例的数据库列表
   useEffect(() => {

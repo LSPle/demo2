@@ -37,10 +37,13 @@ class Instance(db.Model):
     username = db.Column(db.String(128), nullable=True)
     password = db.Column(db.String(255), nullable=True)  # 注意：仅用于演示，生产请勿明文存储
     db_type = db.Column(db.String(64), nullable=False, default='MySQL')
-    status = db.Column(db.String(32), nullable=False, default='running')  # running|warning|error
+    status = db.Column(db.String(32), nullable=False, default='running')  # running|error
     cpu_usage = db.Column(db.Integer, nullable=False, default=0)
     memory_usage = db.Column(db.Integer, nullable=False, default=0)
     storage = db.Column(db.String(128), nullable=True)
+    last_check_time = db.Column(db.DateTime, default=datetime.utcnow)
+    is_monitoring = db.Column(db.Boolean, nullable=False, default=True)
+    connection_timeout = db.Column(db.Integer, nullable=False, default=5)  # 连接超时时间（秒）
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
@@ -57,5 +60,30 @@ class Instance(db.Model):
             'cpuUsage': self.cpu_usage,
             'memoryUsage': self.memory_usage,
             'storage': self.storage,
+            'lastCheckTime': self.last_check_time.strftime('%Y-%m-%d %H:%M:%S') if self.last_check_time else None,
+            'isMonitoring': self.is_monitoring,
+            'connectionTimeout': self.connection_timeout,
             'createTime': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
         }
+    
+    def update_status(self, new_status, check_time=None):
+        """更新实例状态"""
+        self.status = new_status
+        self.last_check_time = check_time or datetime.utcnow()
+        db.session.commit()
+    
+    def is_connection_available(self):
+        """检查实例连接是否可用（使用真正的数据库连接检测）"""
+        from .services.db_validator import db_validator
+        try:
+            is_ok, msg = db_validator.validate_connection(
+                db_type=self.db_type,
+                host=self.host,
+                port=self.port,
+                username=self.username or '',
+                password=self.password or ''
+            )
+            return is_ok
+        except Exception as e:
+            print(f"检查实例 {self.instance_name} 连接时出错: {e}")
+            return False

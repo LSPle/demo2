@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, Space, Tag, Input, Select, Modal, Form, message } from 'antd';
+import { Card, Table, Button, Space, Tag, Input, Select, Modal, Form, message, Badge, Tooltip } from 'antd';
 import {
   PlusOutlined,
   SearchOutlined,
   FilterOutlined,
   EditOutlined,
   DeleteOutlined,
-  DatabaseOutlined
+  DatabaseOutlined,
+  ReloadOutlined,
+  WifiOutlined,
+  DisconnectOutlined
 } from '@ant-design/icons';
 import { API_ENDPOINTS } from '../config/api';
+import { useInstanceStatus } from '../hooks/useInstanceStatus';
 
 const { Search } = Input;
 const { Option } = Select;
@@ -20,6 +24,17 @@ const InstanceManagement = () => {
   const [loading, setLoading] = useState(true);
   const [form] = Form.useForm();
   const [editingInstance, setEditingInstance] = useState(null);
+  
+  // 使用WebSocket实时状态管理
+  const {
+    instances: realtimeInstances,
+    isConnected,
+    lastUpdate,
+    refreshAllInstances,
+    refreshInstance,
+    statusStats,
+    reconnect
+  } = useInstanceStatus();
 
   // 从后端获取实例数据
   const fetchInstanceData = async () => {
@@ -32,6 +47,7 @@ const InstanceManagement = () => {
       // 转换后端数据格式以匹配前端展示需求
       const formattedData = data.map(instance => ({
         key: instance.id.toString(),
+        id: instance.id,
         name: instance.instanceName,
         ip: `${instance.host}:${instance.port}`,
         type: instance.dbType,
@@ -50,20 +66,74 @@ const InstanceManagement = () => {
       setLoading(false);
     }
   };
+  
+  // 合并实时数据和本地数据
+  const getMergedInstanceData = () => {
+    if (realtimeInstances.length === 0) {
+      return instanceData;
+    }
+    
+    return instanceData.map(instance => {
+      const realtimeInstance = realtimeInstances.find(rt => rt.id === instance.id);
+      if (realtimeInstance) {
+        return {
+          ...instance,
+          status: realtimeInstance.status,
+          lastCheckTime: realtimeInstance.lastCheckTime,
+          isMonitoring: realtimeInstance.isMonitoring,
+          isRealtime: true
+        };
+      }
+      return instance;
+    });
+  };
+  
+  // 处理实时刷新
+  const handleRefreshAll = async () => {
+    if (isConnected) {
+      await refreshAllInstances();
+      message.success('已请求刷新所有实例状态');
+    } else {
+      await fetchInstanceData();
+    }
+  };
+  
+  // 处理单个实例刷新
+  const handleRefreshInstance = async (instanceId) => {
+    if (isConnected) {
+      await refreshInstance(instanceId);
+      message.success('已请求刷新实例状态');
+    } else {
+      await fetchInstanceData();
+    }
+  };
+  
+
 
   // 组件挂载时获取数据
   useEffect(() => {
     fetchInstanceData();
   }, []);
 
-  const getStatusTag = (status) => {
+  const getStatusTag = (status, isRealtime = false) => {
     const statusMap = {
       running: { color: 'success', text: '运行中' },
-      warning: { color: 'warning', text: '需要优化' },
       error: { color: 'error', text: '异常' }
     };
-    const config = statusMap[status];
-    return <Tag color={config.color}>{config.text}</Tag>;
+    // 确保status有值，如果为undefined/null则使用'error'
+    const normalizedStatus = status || 'error';
+    const config = statusMap[normalizedStatus] || statusMap.error;
+    
+    return (
+      <Space>
+        <Tag color={config.color}>{config.text}</Tag>
+        {isRealtime && (
+          <Tooltip title="实时状态">
+            <Badge status="processing" />
+          </Tooltip>
+        )}
+      </Space>
+    );
   };
 
   const handleEdit = (record) => {
@@ -184,6 +254,11 @@ const InstanceManagement = () => {
           <div>
             <div style={{ fontWeight: 500 }}>{text}</div>
             <div style={{ fontSize: 12, color: '#8c8c8c' }}>{record.ip}</div>
+            {record.lastCheckTime && (
+              <div style={{ fontSize: 11, color: '#999' }}>
+                最后检查: {new Date(record.lastCheckTime).toLocaleString()}
+              </div>
+            )}
           </div>
         </Space>
       )
@@ -197,8 +272,9 @@ const InstanceManagement = () => {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      render: getStatusTag
+      render: (status, record) => getStatusTag(status, record.isRealtime)
     },
+
     {
       title: '创建时间',
       dataIndex: 'createTime',
@@ -209,6 +285,15 @@ const InstanceManagement = () => {
       key: 'action',
       render: (_, record) => (
         <Space>
+          <Tooltip title="刷新状态">
+            <Button
+              type="link"
+              size="small"
+              icon={<ReloadOutlined />}
+              onClick={() => handleRefreshInstance(record.id)}
+              disabled={!isConnected}
+            />
+          </Tooltip>
           <Button
             type="link"
             size="small"
@@ -244,6 +329,35 @@ const InstanceManagement = () => {
         <p>添加、删除和配置数据库实例</p>
       </div>
 
+      {/* 状态栏 */}
+      <Card className="content-card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Space>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div>
+                <Badge 
+                  status={isConnected ? 'processing' : 'error'} 
+                  text={isConnected ? 'WebSocket已连接' : 'WebSocket未连接'}
+                />
+              </div>
+              {lastUpdate && (
+                <div style={{ fontSize: 12, color: '#666' }}>
+                  最后更新: {lastUpdate.toLocaleString()}
+                </div>
+              )}
+            </div>
+          </Space>
+          
+          <Space>
+            <div style={{ fontSize: 12, color: '#666' }}>
+              总计: {statusStats.total} | 
+              运行: <span style={{ color: '#52c41a' }}>{statusStats.running}</span> | 
+              异常: <span style={{ color: '#ff4d4f' }}>{statusStats.error}</span>
+            </div>
+          </Space>
+        </div>
+      </Card>
+
       {/* 操作栏 */}
       <Card className="content-card" style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -255,6 +369,22 @@ const InstanceManagement = () => {
             >
               添加实例
             </Button>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={handleRefreshAll}
+              disabled={loading}
+            >
+              刷新状态
+            </Button>
+            {!isConnected && (
+              <Button
+                icon={<WifiOutlined />}
+                onClick={reconnect}
+                type="dashed"
+              >
+                重新连接
+              </Button>
+            )}
             {selectedRowKeys.length > 0 && (
               <Button danger>
                 批量删除 ({selectedRowKeys.length})
@@ -277,7 +407,7 @@ const InstanceManagement = () => {
         <Table
           rowSelection={rowSelection}
           columns={columns}
-          dataSource={instanceData}
+          dataSource={getMergedInstanceData()}
           loading={loading}
           pagination={{
             current: 1,

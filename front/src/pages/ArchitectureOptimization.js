@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Select, Button, Space, Descriptions, Tag, Table, message, Divider, Tooltip, Alert } from 'antd';
 import { DatabaseOutlined } from '@ant-design/icons';
 import API_BASE_URL, { API_ENDPOINTS } from '../config/api';
+import { useInstances } from '../hooks/useInstances';
 
 const statusColor = (level) => {
   switch (level) {
@@ -69,45 +70,28 @@ const renderStatusTag = (val) => {
 
 const ArchitectureOptimization = () => {
   const [selectedInstance, setSelectedInstance] = useState('');
-  const [instanceOptions, setInstanceOptions] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [overview, setOverview] = useState(null);
   const [replication, setReplication] = useState(null);
   const [riskItems, setRiskItems] = useState([]);
   const [slowData, setSlowData] = useState(null);
   const [isSlowAnalyzing, setIsSlowAnalyzing] = useState(false);
+  
+  // 使用实例管理Hook
+  const { instanceOptions, loading: loadingInstances } = useInstances();
 
-  // 加载实例列表（与其他页面一致）
+  // 检查当前选择的实例是否仍然可用
   useEffect(() => {
-    const fetchInstances = async () => {
-      try {
-        const response = await fetch(API_ENDPOINTS.INSTANCES);
-        if (!response.ok) throw new Error('API响应失败');
-        const data = await response.json();
-        const options = (Array.isArray(data) ? data : [])
-          .filter((inst) => inst.status !== 'error')
-          .map((inst) => ({
-            value: String(inst.id),
-            label: `${inst.instanceName} (${inst.dbType}) ${inst.host}:${inst.port}`,
-            status: inst.status,
-          }));
-        setInstanceOptions(options);
-        if (selectedInstance && !options.some((o) => o.value === selectedInstance)) {
-          setSelectedInstance('');
-          message.warning('所选实例已不可用，选择已重置');
-        }
-      } catch (err) {
-        console.error('获取实例列表失败:', err);
-        message.error('获取数据库实例列表失败，请检查后端服务');
-        setInstanceOptions([]);
-        if (selectedInstance) setSelectedInstance('');
+    if (selectedInstance && instanceOptions.length > 0) {
+      const isInstanceAvailable = instanceOptions.some(option => 
+        option.value === selectedInstance && option.instance?.status !== 'error'
+      );
+      if (!isInstanceAvailable) {
+        setSelectedInstance('');
+        message.warning('所选实例已不可用，选择已重置');
       }
-    };
-
-    fetchInstances();
-    const timer = setInterval(fetchInstances, 10000);
-    return () => clearInterval(timer);
-  }, [selectedInstance]);
+    }
+  }, [selectedInstance, instanceOptions]);
 
   const handleAnalyze = async () => {
     if (!selectedInstance) {

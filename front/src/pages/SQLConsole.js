@@ -12,12 +12,14 @@ import {
   ReloadOutlined
 } from '@ant-design/icons';
 import { API_ENDPOINTS } from '../config/api';
+import { useInstances } from '../hooks/useInstances';
 const { TextArea } = Input;
 const { Option } = Select;
 
 const SQLConsole = () => {
+  // 使用实例管理Hook
+  const { instanceOptions, loading: loadingInstances } = useInstances();
   // 实例与数据库/表
-  const [instanceOptions, setInstanceOptions] = useState([]);
   const [selectedInstance, setSelectedInstance] = useState('');
   const [selectedDatabase, setSelectedDatabase] = useState('');
   const [treeData, setTreeData] = useState([]); // [{title, key, children, isLeaf, type: 'db'|'table', database, tableName}]
@@ -38,27 +40,7 @@ const SQLConsole = () => {
   const [schemaLoading, setSchemaLoading] = useState(false);
   const [schemaData, setSchemaData] = useState(null);
 
-  // 加载实例列表
-  useEffect(() => {
-    const fetchInstances = async () => {
-      try {
-        const res = await fetch(API_ENDPOINTS.INSTANCES);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || '获取实例列表失败');
-        const list = Array.isArray(data) ? data : (Array.isArray(data.instances) ? data.instances : []);
-        const options = list.map((inst) => ({
-          value: String(inst.id),
-          label: `${inst.instanceName} (${inst.dbType}) ${inst.host}:${inst.port}`
-        }));
-        setInstanceOptions(options);
-      } catch (e) {
-        console.error(e);
-        setInstanceOptions([]);
-        message.error(`获取实例列表失败：${e.message}`);
-      }
-    };
-    fetchInstances();
-  }, []);
+  // 实例选项已通过useInstances Hook自动管理，无需手动获取
 
 
   const fetchDatabases = async (instId) => {

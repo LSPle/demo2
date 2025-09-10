@@ -9,6 +9,7 @@ import {
   DatabaseOutlined
 } from '@ant-design/icons';
 import API_BASE_URL, { API_ENDPOINTS } from '../config/api';
+import { useInstances } from '../hooks/useInstances';
 
 const { Option } = Select;
 
@@ -18,40 +19,22 @@ const ConfigOptimization = () => {
   const [configData, setConfigData] = useState(null);
   const [slowData, setSlowData] = useState(null);
   const [isSlowAnalyzing, setIsSlowAnalyzing] = useState(false);
-  const [instanceOptions, setInstanceOptions] = useState([]);
+  
+  // 使用实例管理Hook
+  const { instanceOptions, loading: loadingInstances } = useInstances();
 
+  // 检查当前选择的实例是否仍然可用
   useEffect(() => {
-    const fetchInstances = async () => {
-      try {
-        const response = await fetch(API_ENDPOINTS.INSTANCES);
-        if (!response.ok) throw new Error('API响应失败');
-        const data = await response.json();
-        const options = (Array.isArray(data) ? data : [])
-          // 仅展示非异常实例，视为"已连接"
-          .filter(inst => inst.status !== 'error')
-          .map(inst => ({
-            value: String(inst.id),
-            label: `${inst.instanceName} (${inst.dbType}) ${inst.host}:${inst.port}`,
-            status: inst.status
-          }));
-        setInstanceOptions(options);
-        // 如果当前选择的实例已不可用，则重置选择
-        if (selectedInstance && !options.some(o => o.value === selectedInstance)) {
-          setSelectedInstance('');
-          message.warning('所选实例已不可用，选择已重置');
-        }
-      } catch (err) {
-        console.error('获取实例列表失败:', err);
-        message.error('获取数据库实例列表失败，请检查后端服务');
-        setInstanceOptions([]);
-        if (selectedInstance) setSelectedInstance('');
+    if (selectedInstance && instanceOptions.length > 0) {
+      const isInstanceAvailable = instanceOptions.some(option => 
+        option.value === selectedInstance && option.instance?.status !== 'error'
+      );
+      if (!isInstanceAvailable) {
+        setSelectedInstance('');
+        message.warning('所选实例已不可用，选择已重置');
       }
-    };
-
-    fetchInstances();
-    const interval = setInterval(fetchInstances, 10000); // 10秒刷新一次，实时更新实例状态
-    return () => clearInterval(interval);
-  }, [selectedInstance]);
+    }
+  }, [selectedInstance, instanceOptions]);
 
   // 百分比与比值解析工具
   const parsePercent = (s) => {

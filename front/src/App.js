@@ -12,6 +12,7 @@ import ConfigOptimization from './pages/ConfigOptimization';
 import Login from './pages/Login';
 import ArchitectureOptimization from './pages/ArchitectureOptimization';
 import SlowQueryLogs from './pages/SlowQueryLogs';
+import { WebSocketProvider } from './contexts/WebSocketContext';
 
 const { Content } = Layout;
 
@@ -101,11 +102,13 @@ const App = () => {
     return keepAliveViews;
   }
 
-  // 其他页面使用AppLayout包装
+  // 其他页面使用AppLayout包装，并提供WebSocket上下文
   return (
-    <AppLayout>
-      {keepAliveViews}
-    </AppLayout>
+    <WebSocketProvider>
+      <AppLayout>
+        {keepAliveViews}
+      </AppLayout>
+    </WebSocketProvider>
   );
 };
 

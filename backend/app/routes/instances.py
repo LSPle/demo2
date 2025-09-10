@@ -3,6 +3,7 @@ from ..models import db, Instance
 from ..services.db_validator import db_validator
 from ..services.database_service import database_service
 from ..services.table_analyzer_service import table_analyzer_service
+from .. import socketio
 import pymysql
 
 instances_bp = Blueprint('instances', __name__)
@@ -55,6 +56,12 @@ def create_instance():
         
         db.session.add(instance)
         db.session.commit()
+        
+        # 推送实例创建事件
+        socketio.emit('instance_created', {
+            'instance': instance.to_dict(),
+            'message': '新实例已创建'
+        }, namespace='/')
         
         return jsonify({
             'message': '实例创建成功',
@@ -116,6 +123,12 @@ def update_instance(instance_id):
         
         db.session.commit()
         
+        # 推送实例更新事件
+        socketio.emit('instance_updated', {
+            'instance': instance.to_dict(),
+            'message': '实例信息已更新'
+        }, namespace='/')
+        
         return jsonify({
             'message': '实例更新成功',
             'instance': instance.to_dict()
@@ -132,9 +145,18 @@ def delete_instance(instance_id):
     try:
         instance = Instance.query.get_or_404(instance_id)
         instance_name = instance.instance_name
+        instance_data = instance.to_dict()  # 在删除前保存数据
         
         db.session.delete(instance)
         db.session.commit()
+        
+        # 推送实例删除事件
+        socketio.emit('instance_deleted', {
+            'instanceId': instance_id,
+            'instanceName': instance_name,
+            'instance': instance_data,
+            'message': f'实例 "{instance_name}" 已删除'
+        }, namespace='/')
         
         return jsonify({
             'message': f'实例 "{instance_name}" 删除成功'
