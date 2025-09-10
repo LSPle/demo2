@@ -8,7 +8,7 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "backend": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location backend; .\\.venv\\Scripts\\python.exe .\\run.py\"",
+    "backend": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location ../backend; .\\.venv\\Scripts\\python.exe .\\run.py\"",
     "frontend": "set PORT=3000&& react-scripts start",
     "dev": "npx concurrently -n \"backend,frontend\" -c \"blue,green\" \"npm:backend\" \"npm:frontend\""
   },
